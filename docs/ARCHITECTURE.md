@@ -4,66 +4,95 @@
 
 PhiForm separates **generation capability** from **project authority**.
 
-A neural backend can return a candidate artifact, but it does not own the workspace, mutate unrelated project state, silently replace source material, or manufacture provenance. The editor decides what becomes part of a project.
+A backend can return a candidate artifact, but it does not own the workspace, mutate unrelated project state, silently replace source material, or manufacture provenance. The editor decides what becomes part of a project.
 
-## Core boundaries
+## Rung boundaries
 
 ### Input envelope
 
-A generation request is an explicit data structure. Rung 1 binds text and optional image metadata. Later rungs will add source hashes, image bytes/URLs, masks, depth maps, camera poses, multi-view groups, and imported mesh references.
+A generation request contains durable, receipt-safe metadata such as the prompt and image name/type/size.
+
+Runtime-only material, such as browser `File` objects, is passed separately. This prevents receipts from accidentally embedding megabytes of opaque binary input.
 
 ### Adapter contract
 
-`Neural3DAdapter` is the boundary between the editor and a model/backend. An adapter declares capabilities and returns a `GenerationResult`.
+`Neural3DAdapter` is the editor/backend boundary. It declares capabilities and accepts both a durable request and optional runtime inputs.
 
-This lets PhiForm support:
+The current implementations are:
 
-- in-browser experimental models
-- localhost inference services
-- workstation GPU workers
-- remote APIs
-- queued render/inference farms
+- `proof.procedural.v1`: in-browser procedural qualification
+- `LocalBridgeAdapter`: transport adapter for localhost model services
 
-without teaching the UI model-specific details.
+### Local bridge
+
+The browser speaks a small model-neutral protocol:
+
+```text
+GET  /v1/health
+GET  /v1/backends
+POST /v1/jobs
+GET  /v1/jobs/:id
+GET  /artifacts/:id.glb
+```
+
+The browser does not need SF3D-, TRELLIS-, or Hunyuan-specific code. A bridge implementation owns that translation.
+
+### Backend registry
+
+Each backend declares:
+
+- stable backend ID
+- human-readable label
+- proof vs neural classification
+- availability
+- model identity
+- license metadata
+- text-to-3D support
+- image-to-3D support
+- multi-view support
+- GLB output support
+
+PhiForm may refuse a request when a backend does not declare the necessary capability.
+
+### Job lifecycle
+
+Generation is asynchronous:
+
+```text
+queued -> running -> succeeded
+                   -> failed
+```
+
+A successful job returns a GLB artifact descriptor with URL, byte length, and optional SHA-256.
 
 ### Model artifact
 
-The artifact is editor-owned state. Rung 1 uses a small procedural representation to qualify the path. A real geometry rung will add mesh buffers, materials, textures, units, bounds, topology metadata, and imported/exported asset references.
+PhiForm currently supports two editor-owned artifact forms:
+
+- `primitive`: local proof geometry
+- `glb`: bridge-returned GLB asset
+
+GLB artifacts are loaded with Three.js, centered, normalized, and displayed without granting the backend control over unrelated project state.
 
 ### Receipt
 
-Every generation returns a receipt that states:
+A bridge generation receipt binds:
 
-- which adapter acted
-- which request was bound
-- which artifact resulted
-- which seed was used
-- when the event happened
-- caveats or limitations
+- adapter identity
+- backend identity
+- bridge job ID
+- durable request metadata
+- output artifact ID
+- seed
+- output format
+- SHA-256 when supplied
+- byte length
+- backend caveats and license metadata
 
-Rung 1 uses a non-cryptographic FNV-1a checksum only as a visible integrity placeholder. Production receipts should bind source and output assets with cryptographic hashes.
+The local receipt checksum remains a lightweight UI integrity marker. It is not a replacement for the SHA-256 over artifact bytes.
 
-## Planned local inference bridge
+## Trust boundary
 
-The preferred first real-model integration is a local service with a narrow interface:
+The localhost bridge is a capability boundary, not an authority transfer.
 
-```text
-PhiForm Web UI
-     |
-     | POST /v1/generate
-     v
-Local PhiForm Bridge
-     |
-     +-- adapter: sf3d
-     +-- adapter: trellis
-     +-- adapter: hunyuan
-     |
-     v
-job directory / artifact store
-     |
-     +-- result.glb
-     +-- textures/*
-     +-- receipt.json
-```
-
-The bridge should expose model/license metadata and never imply that all attached backends share PhiForm's MIT license.
+A real backend may run native code, large model weights, CUDA workloads, or Python environments. Keeping that machinery behind the bridge lets the web studio remain small and auditable while preserving explicit backend identity.
