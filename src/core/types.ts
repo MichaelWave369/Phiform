@@ -68,6 +68,79 @@ export interface MeshStats {
   bounds: Vec3Tuple
 }
 
+export interface MeshTarget {
+  id: string
+  name: string
+  vertices: number
+  triangles: number
+}
+
+export type EditTarget =
+  | { kind: 'artifact' }
+  | { kind: 'mesh'; mesh: MeshTarget }
+
+export type EditNodeKind =
+  | 'source'
+  | 'workspace-snapshot'
+  | 'neural-intent'
+  | 'derived-export'
+
+export type EditExecution =
+  | 'source'
+  | 'manual'
+  | 'recorded-only'
+  | 'exported'
+
+export interface DerivedArtifactLineage {
+  id: string
+  label: string
+  format: 'glb'
+  sha256: string
+  byteLength: number
+  createdAt: string
+}
+
+export interface EditGraphNode {
+  id: string
+  parentIds: string[]
+  branch: string
+  kind: EditNodeKind
+  label: string
+  createdAt: string
+  sourceArtifactId: string
+  edits: WorkspaceEditState
+  target: EditTarget
+  instruction?: string
+  execution: EditExecution
+  derivedArtifact?: DerivedArtifactLineage
+}
+
+export interface EditReceipt {
+  schema: 'phiform.edit-receipt.v1'
+  id: string
+  nodeId: string
+  parentNodeIds: string[]
+  branch: string
+  operation: EditNodeKind
+  createdAt: string
+  sourceArtifactId: string
+  target: EditTarget
+  instruction?: string
+  execution: EditExecution
+  derivedArtifact?: DerivedArtifactLineage
+  notes: string[]
+}
+
+export interface EditGraph {
+  schema: 'phiform.edit-graph.v1'
+  rootNodeId: string
+  currentNodeId: string
+  currentBranch: string
+  branches: Record<string, string>
+  nodes: Record<string, EditGraphNode>
+  receipts: EditReceipt[]
+}
+
 export interface GenerationReceipt {
   schema: 'phiform.receipt.v1'
   id: string
@@ -94,11 +167,21 @@ export interface GenerationResult {
   receipt: GenerationReceipt
 }
 
-export interface PortableProject {
+export interface PortableProjectV1 {
   schema: 'phiform.project.v1'
   savedAt: string
   artifact: ModelArtifact
   edits: WorkspaceEditState
+  latestReceipt?: GenerationReceipt
+  glbBase64?: string
+}
+
+export interface PortableProject {
+  schema: 'phiform.project.v2'
+  savedAt: string
+  artifact: ModelArtifact
+  edits: WorkspaceEditState
+  editGraph: EditGraph
   latestReceipt?: GenerationReceipt
   glbBase64?: string
 }

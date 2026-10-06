@@ -1,6 +1,6 @@
 {
   "name": "phiform",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,6 +8,7 @@
     "bridge": "node bridge/dev-server.mjs",
     "sf3d:check": "node scripts/check-sf3d.mjs",
     "contract": "node scripts/bridge-contract-check.mjs",
+    "graph:contract": "tsx scripts/edit-graph-check.ts",
     "build": "tsc --noEmit && vite build",
     "check": "tsc --noEmit --pretty false",
     "preview": "vite preview"
@@ -22,6 +23,7 @@
     "@types/react-dom": "^19.1.9",
     "@types/three": "^0.180.0",
     "@vitejs/plugin-react": "^5.0.4",
+    "tsx": "^4.19.2",
     "typescript": "^5.9.2",
     "vite": "^7.1.7"
   }

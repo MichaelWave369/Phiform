@@ -4,9 +4,9 @@
 
 > Neural systems may propose geometry. The workspace keeps editable state, provenance, and export authority.
 
-## Current state — v0.4 / Rung 4
+## Current state — v0.5 / Rung 5
 
-PhiForm has crossed the line from neural generator into an editable 3D workbench.
+PhiForm now has a branchable edit graph on top of its neural generation and 3D editing stack.
 
 ### Rung 1 — workbench foundation ✅
 React/TypeScript studio, Three.js viewport, adapter contract, proof generation, receipts.
@@ -18,19 +18,63 @@ Backend discovery, async jobs, GLB ingestion, SHA-256-bound artifacts.
 Optional Stable Fast 3D integration through an operator-installed upstream checkout.
 
 ### Rung 4 — editable workspace ✅
-- orbit camera controls
-- click selection
-- translate / rotate / scale transform gizmos
-- numeric transform editing
-- non-destructive edit layer over the source artifact
-- optional material color / metalness / roughness override
-- live mesh, vertex, triangle, material, and bounds inspection
-- browser-local project persistence in IndexedDB
-- GLB bytes persisted with the project rather than relying on an old bridge URL
-- portable `.phiform.json` project files with embedded GLB bytes
-- portable project import
-- edited/baked GLB export through Three.js GLTFExporter
-- source-generation receipts kept separate from workspace edit revisions
+Orbit/select/transform/material editing, mesh inspection, browser persistence, portable projects, edited GLB export.
+
+### Rung 5 — neural edit graph ✅
+- branchable edit history
+- explicit working-tree dirty/clean state
+- committed workspace snapshots
+- checkout of prior graph nodes
+- stable per-mesh targeting from viewport clicks
+- whole-artifact targeting
+- mesh-target metadata with vertex/triangle counts
+- neural edit intent nodes
+- explicit `recorded-only` execution state when no edit backend ran
+- formal `phiform.edit-receipt.v1` receipts
+- derived GLB export lineage with browser-computed SHA-256
+- project format v2 carrying the edit graph
+- automatic import migration from Rung 4 `phiform.project.v1`
+- CI contract for branch/intent/export lineage behavior
+
+## Core history model
+
+```text
+source artifact
+      |
+      v
+[source node]  main
+      |
+      v
+[workspace snapshot]
+      |\
+      | \________________
+      |                  \
+      v                   v
+main                 handle-variant
+  |                       |
+  v                       v
+snapshot             neural edit intent
+                          |
+                          | execution: recorded-only
+                          | target: mesh-003
+                          v
+                    future edit backend
+                          |
+                          v
+                    derived artifact
+```
+
+An edit intent is **not** an edit result.
+
+PhiForm can now record:
+
+- what should change
+- which mesh or artifact should change
+- which graph node the request descends from
+- which branch owns the request
+- what workspace state existed when it was requested
+
+Until a capable backend returns a changed artifact, that node remains `execution: recorded-only`.
 
 ## Run
 
@@ -47,42 +91,33 @@ npm run bridge
 
 Stable Fast 3D setup is documented in [docs/SF3D.md](docs/SF3D.md).
 
-## Workspace model
-
-```text
-source artifact
-(GLB / proof geometry)
-        |
-        | immutable provenance
-        v
-+-------------------------+
-| PhiForm workspace layer |
-| position                |
-| rotation                |
-| scale                   |
-| material override       |
-| edit revision           |
-+-------------------------+
-        |
-        +--------> browser project save
-        |          manifest + GLB bytes
-        |
-        +--------> portable .phiform.json
-        |          manifest + embedded GLB
-        |
-        +--------> edited GLB export
-                   baked current state
-```
-
-The source generation receipt is not rewritten when you move, recolor, or scale an object. Those operations belong to the workspace edit layer. Exporting an edited GLB creates a derived artifact without pretending the neural source changed retroactively.
-
 ## Qualification
 
 ```bash
 npm run contract
+npm run graph:contract
 npm run check
 npm run build
 ```
+
+## Project files
+
+New saves use:
+
+```text
+phiform.project.v2
+```
+
+Project v2 stores:
+
+- source artifact metadata
+- current working edit state
+- generation receipt
+- `phiform.edit-graph.v1`
+- edit receipts
+- embedded GLB bytes for portable GLB projects
+
+Rung 4 `phiform.project.v1` files are migrated on import by creating a new source edit graph from their saved artifact/edit state.
 
 ## Documentation
 
@@ -91,6 +126,7 @@ npm run build
 - [Local bridge protocol](docs/BRIDGE.md)
 - [Stable Fast 3D backend](docs/SF3D.md)
 - [Editable workspace](docs/WORKSPACE.md)
+- [Neural edit graph](docs/EDIT_GRAPH.md)
 
 ## Planned rungs
 
@@ -98,7 +134,7 @@ npm run build
 2. Local inference bridge ✅
 3. First neural backend / SF3D ✅
 4. Editable geometry workspace ✅
-5. **Neural edit graph**: non-destructive branches, masks, localized edits, version lineage.
+5. Neural edit graph ✅
 6. **Agent interface**: deterministic commands and capability-scoped modeling operations.
 7. **Production path**: retopo/LOD, texture pipeline, export qualification, game-engine packages.
 

@@ -97,3 +97,14 @@ Rung 4 intentionally does not yet claim:
 - cryptographic receipt for the edited export
 
 Those belong to later rungs rather than being hidden behind buttons that do nothing useful.
+
+
+## Rung 5 history integration
+
+Workspace edits now behave like a working tree over the current edit-graph node.
+
+Transform/material changes do not automatically become history. Use **Commit** in the Edit Graph panel to create a `workspace-snapshot` node.
+
+Browser and portable project saves now use `phiform.project.v2` and include the edit graph. Rung 4 project v1 files are migrated during load.
+
+Edited GLB export now creates a `derived-export` lineage node with SHA-256 over the exported bytes.
