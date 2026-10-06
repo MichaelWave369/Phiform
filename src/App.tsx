@@ -1,6 +1,17 @@
 import { useMemo, useRef, useState } from 'react'
 import { Viewport } from './components/Viewport'
 import {
+  checkoutNode,
+  commitWorkspaceSnapshot,
+  createBranch,
+  createEditGraph,
+  currentGraphNode,
+  isWorkspaceDirty,
+  orderedGraphNodes,
+  recordDerivedExport,
+  recordNeuralEditIntent,
+} from './core/editGraph'
+import {
   createPortableProject,
   downloadPortableProject,
   loadProjectFromBrowser,
@@ -9,6 +20,8 @@ import {
 } from './core/projectStore'
 import { receiptChecksum, receiptText } from './core/receipt'
 import type {
+  DerivedArtifactLineage,
+  EditTarget,
   GenerationReceipt,
   ImageSource,
   MeshStats,
@@ -18,6 +31,7 @@ import type {
   WorkspaceEditState,
 } from './core/types'
 import {
+  cloneWorkspaceEdits,
   defaultWorkspaceEdits,
   degrees,
   radians,
@@ -65,6 +79,18 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url)
 }
 
+async function sha256Blob(blob: Blob): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer())
+  return [...new Uint8Array(digest)]
+    .map((value) => value.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+function derivedId(): string {
+  const uuid = crypto.randomUUID?.()
+  return uuid ? `derived-${uuid}` : `derived-${Date.now().toString(36)}`
+}
+
 export function App() {
   const [prompt, setPrompt] = useState('luminous nested portal machine')
   const [image, setImage] = useState<ImageSource | undefined>()
@@ -72,6 +98,10 @@ export function App() {
   const [artifact, setArtifact] = useState<ModelArtifact>(initialArtifact)
   const [receipts, setReceipts] = useState<GenerationReceipt[]>([])
   const [edits, setEdits] = useState<WorkspaceEditState>(defaultWorkspaceEdits)
+  const [editGraph, setEditGraph] = useState(() =>
+    createEditGraph(initialArtifact, defaultWorkspaceEdits()),
+  )
+  const [target, setTarget] = useState<EditTarget>({ kind: 'artifact' })
   const [meshStats, setMeshStats] = useState<MeshStats>(emptyStats)
   const [transformMode, setTransformMode] = useState<TransformMode>('translate')
   const [selected, setSelected] = useState(true)
@@ -85,6 +115,9 @@ export function App() {
   const [bridgeStatus, setBridgeStatus] = useState<'idle' | 'checking' | 'online' | 'error'>('idle')
   const [error, setError] = useState('')
   const [projectStatus, setProjectStatus] = useState('')
+  const [snapshotLabel, setSnapshotLabel] = useState('')
+  const [branchName, setBranchName] = useState('')
+  const [neuralInstruction, setNeuralInstruction] = useState('')
   const importRef = useRef<HTMLInputElement>(null)
 
   const latestReceipt = receipts[0]
@@ -92,6 +125,13 @@ export function App() {
     () => (latestReceipt ? receiptChecksum(latestReceipt) : 'no receipt yet'),
     [latestReceipt],
   )
+  const graphNodes = useMemo(() => orderedGraphNodes(editGraph), [editGraph])
+  const latestEditReceipt = editGraph.receipts.at(-1)
+  const dirty = useMemo(
+    () => isWorkspaceDirty(editGraph, edits),
+    [editGraph, edits],
+  )
+
   const selectedBackend = backends.find((backend) => backend.id === backendId)
   const availableBackends = backends.filter((backend) => backend.available)
   const unavailableBackends = backends.filter((backend) => !backend.available)
@@ -137,9 +177,12 @@ export function App() {
       }
 
       const result = await adapter.generate({ prompt, image }, { imageFile })
+      const nextEdits = defaultWorkspaceEdits()
       setArtifact(result.artifact)
       setReceipts((current) => [result.receipt, ...current].slice(0, 12))
-      setEdits(defaultWorkspaceEdits())
+      setEdits(nextEdits)
+      setEditGraph(createEditGraph(result.artifact, nextEdits, result.receipt))
+      setTarget({ kind: 'artifact' })
       setSelected(true)
       setProjectStatus('')
     } catch (cause) {
@@ -186,11 +229,74 @@ export function App() {
     setSelected(true)
   }
 
+  const commitSnapshot = () => {
+    setError('')
+    try {
+      const next = commitWorkspaceSnapshot(
+        editGraph,
+        artifact,
+        edits,
+        snapshotLabel,
+        target,
+      )
+      setEditGraph(next)
+      setSnapshotLabel('')
+      setProjectStatus('WORKSPACE SNAPSHOT COMMITTED')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Snapshot commit failed.')
+    }
+  }
+
+  const addBranch = () => {
+    setError('')
+    try {
+      const next = createBranch(editGraph, branchName)
+      setEditGraph(next)
+      setBranchName('')
+      setProjectStatus(`BRANCH ${next.currentBranch} CREATED`)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Branch creation failed.')
+    }
+  }
+
+  const recordIntent = () => {
+    setError('')
+    try {
+      const next = recordNeuralEditIntent(
+        editGraph,
+        artifact,
+        edits,
+        neuralInstruction,
+        target,
+      )
+      setEditGraph(next)
+      setNeuralInstruction('')
+      setProjectStatus('NEURAL EDIT INTENT RECORDED · NOT EXECUTED')
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Edit intent failed.')
+    }
+  }
+
+  const checkout = (nodeId: string) => {
+    setError('')
+    try {
+      const next = checkoutNode(editGraph, nodeId)
+      const node = currentGraphNode(next)
+      setEditGraph(next)
+      setEdits(cloneWorkspaceEdits(node.edits))
+      setTarget(node.target)
+      setSelected(true)
+      setProjectStatus(`CHECKED OUT ${node.label}`)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Graph checkout failed.')
+    }
+  }
+
   const saveLocal = async () => {
     setProjectStatus('SAVING…')
     setError('')
     try {
-      await saveProjectToBrowser(artifact, edits, latestReceipt)
+      await saveProjectToBrowser(artifact, edits, editGraph, latestReceipt)
       setProjectStatus('SAVED LOCALLY')
     } catch (cause) {
       setProjectStatus('')
@@ -198,15 +304,21 @@ export function App() {
     }
   }
 
+  const applyProject = (project: Awaited<ReturnType<typeof loadProjectFromBrowser>>) => {
+    setArtifact(project.artifact)
+    setEdits(project.edits)
+    setEditGraph(project.editGraph)
+    setReceipts(project.latestReceipt ? [project.latestReceipt] : [])
+    setTarget(currentGraphNode(project.editGraph).target)
+    setSelected(true)
+  }
+
   const loadLocal = async () => {
     setProjectStatus('LOADING…')
     setError('')
     try {
       const project = await loadProjectFromBrowser()
-      setArtifact(project.artifact)
-      setEdits(project.edits)
-      setReceipts(project.latestReceipt ? [project.latestReceipt] : [])
-      setSelected(true)
+      applyProject(project)
       setProjectStatus('LOCAL PROJECT LOADED')
     } catch (cause) {
       setProjectStatus('')
@@ -218,9 +330,14 @@ export function App() {
     setProjectStatus('PACKING PROJECT…')
     setError('')
     try {
-      const project = await createPortableProject(artifact, edits, latestReceipt)
+      const project = await createPortableProject(
+        artifact,
+        edits,
+        editGraph,
+        latestReceipt,
+      )
       downloadPortableProject(project)
-      setProjectStatus('PROJECT EXPORTED')
+      setProjectStatus('PROJECT V2 EXPORTED')
     } catch (cause) {
       setProjectStatus('')
       setError(cause instanceof Error ? cause.message : 'Project export failed.')
@@ -233,10 +350,7 @@ export function App() {
     setError('')
     try {
       const project = await readPortableProject(file)
-      setArtifact(project.artifact)
-      setEdits(project.edits)
-      setReceipts(project.latestReceipt ? [project.latestReceipt] : [])
-      setSelected(true)
+      applyProject(project)
       setProjectStatus('PROJECT IMPORTED')
     } catch (cause) {
       setProjectStatus('')
@@ -244,10 +358,36 @@ export function App() {
     }
   }
 
+  const handleEditedExport = async (blob: Blob) => {
+    try {
+      const filename = `${safeName(artifact.label)}-edited.glb`
+      const sha256 = await sha256Blob(blob)
+      const derived: DerivedArtifactLineage = {
+        id: derivedId(),
+        label: filename,
+        format: 'glb',
+        sha256,
+        byteLength: blob.size,
+        createdAt: new Date().toISOString(),
+      }
+      setEditGraph((current) =>
+        recordDerivedExport(current, artifact, edits, derived),
+      )
+      downloadBlob(blob, filename)
+      setProjectStatus(`DERIVED GLB EXPORTED · ${sha256.slice(0, 12)}…`)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Derived export receipt failed.')
+    }
+  }
+
   const artifactType = artifact.kind === 'glb' ? 'GLB' : artifact.primitive
   const artifactDetail = artifact.kind === 'glb'
     ? artifact.backendId
     : artifact.scale.map((value) => value.toFixed(2)).join(' / ')
+
+  const targetLabel = target.kind === 'mesh'
+    ? `${target.mesh.id} · ${target.mesh.name}`
+    : 'whole artifact'
 
   const vectorFields: Array<{
     key: 'position' | 'rotation' | 'scale'
@@ -275,8 +415,10 @@ export function App() {
         </div>
 
         <div className="top-status">
-          <span className="pill"><i /> RUNG 4</span>
-          <span className="pill muted">SOURCE IMMUTABLE · EDITS LAYERED</span>
+          <span className="pill"><i /> RUNG 5</span>
+          <span className="pill muted">
+            {editGraph.currentBranch} · {dirty ? 'WORKING TREE DIRTY' : 'COMMITTED'}
+          </span>
         </div>
       </header>
 
@@ -286,7 +428,7 @@ export function App() {
             <span>01</span>
             <div>
               <h2>Intent</h2>
-              <p>Generate a source artifact, then edit it in the workspace.</p>
+              <p>Generate source geometry, then branch and target edits.</p>
             </div>
           </div>
 
@@ -332,35 +474,22 @@ export function App() {
             ) : (
               <div className="bridge-config">
                 <label className="field-label" htmlFor="bridge-endpoint">BRIDGE ENDPOINT</label>
-                <input
-                  id="bridge-endpoint"
-                  type="text"
-                  value={endpoint}
-                  onChange={(event) => setEndpoint(event.target.value)}
-                />
+                <input id="bridge-endpoint" type="text" value={endpoint} onChange={(event) => setEndpoint(event.target.value)} />
                 <button className="connect" disabled={bridgeStatus === 'checking'} onClick={connectBridge}>
                   {bridgeStatus === 'checking' ? 'CHECKING…' : 'CONNECT / REFRESH'}
                 </button>
-
-                <div className={`bridge-state ${bridgeStatus}`}>
-                  <span />{bridgeStatus.toUpperCase()}
-                </div>
+                <div className={`bridge-state ${bridgeStatus}`}><span />{bridgeStatus.toUpperCase()}</div>
 
                 {availableBackends.length > 0 && (
                   <>
                     <label className="field-label" htmlFor="backend">BACKEND</label>
                     <select id="backend" value={backendId} onChange={(event) => setBackendId(event.target.value)}>
                       {availableBackends.map((backend) => (
-                        <option key={backend.id} value={backend.id}>
-                          {backend.label} · {backend.kind}
-                        </option>
+                        <option key={backend.id} value={backend.id}>{backend.label} · {backend.kind}</option>
                       ))}
                     </select>
                     {selectedBackend && (
-                      <p>
-                        {selectedBackend.model ?? selectedBackend.id}
-                        {selectedBackend.license ? ` · ${selectedBackend.license}` : ''}
-                      </p>
+                      <p>{selectedBackend.model ?? selectedBackend.id}{selectedBackend.license ? ` · ${selectedBackend.license}` : ''}</p>
                     )}
                   </>
                 )}
@@ -389,7 +518,7 @@ export function App() {
         <section className="stage">
           <div className="stage-meta">
             <span>ARTIFACT / {artifact.id.slice(0, 22)}</span>
-            <span>{latestReceipt?.seedKind === 'request-fingerprint' ? 'TRACE' : 'SEED'} {artifact.seed}</span>
+            <span>NODE / {editGraph.currentNodeId.slice(0, 18)}</span>
           </div>
 
           <Viewport
@@ -397,14 +526,13 @@ export function App() {
             edits={edits}
             transformMode={transformMode}
             selected={selected}
+            target={target}
             exportRequest={exportRequest}
             onSelectedChange={setSelected}
+            onTargetChange={setTarget}
             onEditsChange={setEdits}
             onStatsChange={setMeshStats}
-            onExportComplete={(blob) => {
-              downloadBlob(blob, `${safeName(artifact.label)}-edited.glb`)
-              setProjectStatus('EDITED GLB EXPORTED')
-            }}
+            onExportComplete={(blob) => { void handleEditedExport(blob) }}
             onError={setError}
           />
 
@@ -417,7 +545,7 @@ export function App() {
               <span>{artifactType}</span>
               <span>{meshStats.meshes} meshes</span>
               <span>{meshStats.triangles.toLocaleString()} tris</span>
-              <span>rev {edits.revision}</span>
+              <span>{dirty ? 'dirty' : 'committed'}</span>
             </div>
           </div>
         </section>
@@ -426,8 +554,8 @@ export function App() {
           <div className="panel-heading">
             <span>02</span>
             <div>
-              <h2>Workspace</h2>
-              <p>Non-destructive edits over the source artifact.</p>
+              <h2>Workspace + Graph</h2>
+              <p>Edit working state, commit snapshots, branch, and record neural intent.</p>
             </div>
           </div>
 
@@ -436,8 +564,8 @@ export function App() {
             <div><span>{artifact.kind === 'glb' ? 'BACKEND' : 'SOURCE SCALE'}</span><strong>{artifactDetail}</strong></div>
             <div><span>VERTICES</span><strong>{meshStats.vertices.toLocaleString()}</strong></div>
             <div><span>TRIANGLES</span><strong>{meshStats.triangles.toLocaleString()}</strong></div>
-            <div><span>MESHES</span><strong>{meshStats.meshes}</strong></div>
-            <div><span>MATERIALS</span><strong>{meshStats.materials}</strong></div>
+            <div><span>GRAPH NODES</span><strong>{graphNodes.length}</strong></div>
+            <div><span>BRANCHES</span><strong>{Object.keys(editGraph.branches).length}</strong></div>
           </div>
 
           <div className="editor-card">
@@ -513,14 +641,10 @@ export function App() {
                     }
                   />
                 </label>
-
                 <label>
                   METAL {edits.material.metalness.toFixed(2)}
                   <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
+                    type="range" min="0" max="1" step="0.01"
                     disabled={!edits.material.enabled}
                     value={edits.material.metalness}
                     onChange={(event) =>
@@ -532,14 +656,10 @@ export function App() {
                     }
                   />
                 </label>
-
                 <label>
                   ROUGH {edits.material.roughness.toFixed(2)}
                   <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
+                    type="range" min="0" max="1" step="0.01"
                     disabled={!edits.material.enabled}
                     value={edits.material.roughness}
                     onChange={(event) =>
@@ -557,19 +677,106 @@ export function App() {
             <div className="bounds-readout">
               BOUNDS · {meshStats.bounds.map((value) => value.toFixed(2)).join(' × ')}
             </div>
+            <button className="reset-edits" onClick={resetEdits}>RESET WORKING TREE</button>
+          </div>
 
-            <button className="reset-edits" onClick={resetEdits}>RESET EDIT LAYER</button>
+          <div className="graph-card">
+            <div className="graph-head">
+              <div>
+                <span className="eyebrow">EDIT GRAPH</span>
+                <strong>{editGraph.currentBranch}</strong>
+              </div>
+              <span className={dirty ? 'dirty' : 'clean'}>{dirty ? 'DIRTY' : 'CLEAN'}</span>
+            </div>
+
+            <div className="target-readout">
+              <span>TARGET</span>
+              <strong>{targetLabel}</strong>
+              {target.kind === 'mesh' && (
+                <small>
+                  {target.mesh.vertices.toLocaleString()} verts · {target.mesh.triangles.toLocaleString()} tris
+                </small>
+              )}
+              {target.kind === 'mesh' && (
+                <button onClick={() => setTarget({ kind: 'artifact' })}>TARGET WHOLE ARTIFACT</button>
+              )}
+            </div>
+
+            <label className="field-label" htmlFor="snapshot-label">SNAPSHOT LABEL</label>
+            <div className="inline-action">
+              <input
+                id="snapshot-label"
+                type="text"
+                value={snapshotLabel}
+                placeholder={`revision ${edits.revision}`}
+                onChange={(event) => setSnapshotLabel(event.target.value)}
+              />
+              <button onClick={commitSnapshot}>COMMIT</button>
+            </div>
+
+            <label className="field-label" htmlFor="branch-name">NEW BRANCH</label>
+            <div className="inline-action">
+              <input
+                id="branch-name"
+                type="text"
+                value={branchName}
+                placeholder="handle-variant"
+                onChange={(event) => setBranchName(event.target.value)}
+              />
+              <button onClick={addBranch}>BRANCH</button>
+            </div>
+
+            <label className="field-label" htmlFor="neural-intent">NEURAL EDIT INTENT</label>
+            <textarea
+              id="neural-intent"
+              className="graph-intent"
+              value={neuralInstruction}
+              onChange={(event) => setNeuralInstruction(event.target.value)}
+              placeholder={
+                target.kind === 'mesh'
+                  ? `Describe an edit for ${target.mesh.name}…`
+                  : 'Describe a whole-artifact neural edit…'
+              }
+            />
+            <button className="record-intent" onClick={recordIntent}>
+              RECORD INTENT · DO NOT EXECUTE
+            </button>
+            <p className="graph-caveat">
+              Rung 5 records target + instruction + lineage. No localized neural edit backend is claimed or executed.
+            </p>
+
+            <div className="graph-nodes">
+              {[...graphNodes].reverse().slice(0, 12).map((node) => (
+                <button
+                  className={node.id === editGraph.currentNodeId ? 'current' : ''}
+                  key={node.id}
+                  onClick={() => checkout(node.id)}
+                >
+                  <span>{node.kind.replaceAll('-', ' ')}</span>
+                  <strong>{node.label}</strong>
+                  <small>{node.branch} · {node.execution}</small>
+                </button>
+              ))}
+            </div>
+
+            {latestEditReceipt && (
+              <div className="edit-receipt-mini">
+                <span>LATEST EDIT RECEIPT</span>
+                <strong>{latestEditReceipt.id}</strong>
+                <small>{latestEditReceipt.operation} · {latestEditReceipt.execution}</small>
+              </div>
+            )}
           </div>
 
           <div className="project-card">
-            <span className="eyebrow">PROJECT + EXPORT</span>
+            <span className="eyebrow">PROJECT + DERIVED EXPORT</span>
             <div className="project-actions">
               <button onClick={saveLocal}>SAVE LOCAL</button>
               <button onClick={loadLocal}>LOAD LOCAL</button>
               <button onClick={exportProject}>EXPORT .PHIFORM</button>
               <button onClick={() => importRef.current?.click()}>IMPORT .PHIFORM</button>
               <button className="wide" onClick={() => setExportRequest((value) => value + 1)}>
-                EXPORT EDITED GLB
+                EXPORT + RECEIPT EDITED GLB
               </button>
             </div>
             <input
@@ -600,16 +807,16 @@ export function App() {
               <div><dt>job</dt><dd>{latestReceipt?.jobId ?? '—'}</dd></div>
               <div><dt>sha256</dt><dd>{latestReceipt?.output?.sha256 ?? '—'}</dd></div>
               <div><dt>receipt</dt><dd>{checksum}</dd></div>
-              <div><dt>edit rev</dt><dd>{edits.revision}</dd></div>
+              <div><dt>graph</dt><dd>{editGraph.schema}</dd></div>
             </dl>
           </div>
 
           <div className="authority-note">
-            <span>SOURCE ≠ EDIT LAYER</span>
+            <span>INTENT ≠ EXECUTION</span>
             <p>
-              PhiForm keeps neural/proof source provenance intact. Workspace transforms
-              and material changes are explicit edits and only become baked geometry when
-              you export an edited GLB.
+              PhiForm can now describe exactly what should change, where it should change,
+              and which version it descends from. A recorded neural intent remains evidence
+              of requested work until a capable backend actually returns a derived artifact.
             </p>
           </div>
         </aside>
