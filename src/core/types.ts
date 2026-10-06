@@ -54,6 +54,7 @@ export interface GenerationReceipt {
   request: GenerationRequest
   outputArtifactId: string
   seed: number
+  seedKind?: 'request-fingerprint' | 'inference'
   status: 'success'
   output?: {
     format: 'procedural' | 'glb'
