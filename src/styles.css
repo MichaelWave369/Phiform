@@ -762,3 +762,191 @@ textarea:focus {
   font-size: 9px;
   line-height: 1.45;
 }
+
+
+.viewport-tool-badge {
+  position: absolute;
+  z-index: 2;
+  top: 13px;
+  right: 13px;
+  padding: 6px 8px;
+  border: 1px solid rgba(139, 117, 255, 0.22);
+  border-radius: 7px;
+  background: rgba(10, 8, 18, 0.72);
+  color: #a99cf0;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  pointer-events: none;
+}
+
+.editor-card,
+.project-card {
+  margin-top: 16px;
+  padding: 13px;
+  border: 1px solid #22313b;
+  border-radius: 10px;
+  background: #090e13;
+}
+
+.editor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.editor-head .eyebrow {
+  margin: 0;
+}
+
+.editor-head button,
+.tool-tabs button,
+.project-actions button,
+.reset-edits {
+  border: 1px solid #293943;
+  border-radius: 7px;
+  background: #101820;
+  color: #7e98a5;
+  padding: 7px 8px;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.editor-head button:hover,
+.tool-tabs button:hover,
+.project-actions button:hover,
+.reset-edits:hover {
+  border-color: #486878;
+  color: #a8dce8;
+}
+
+.tool-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  margin-top: 11px;
+}
+
+.tool-tabs button.active {
+  border-color: #5e8ea0;
+  background: #14252d;
+  color: #a8e7f5;
+}
+
+.vector-row {
+  margin-top: 11px;
+}
+
+.vector-row > span {
+  display: block;
+  margin-bottom: 5px;
+  color: #647984;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+}
+
+.vector-row > div {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+}
+
+.vector-row input[type="number"] {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 6px;
+  border: 1px solid #22313b;
+  border-radius: 6px;
+  outline: none;
+  background: #0c1217;
+  color: #a8bbc4;
+  font: 9px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.vector-row input[type="number"]:focus {
+  border-color: #4f8295;
+}
+
+.material-edit {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid #19242c;
+}
+
+.material-edit > label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #859aa5;
+  font-size: 8px;
+  letter-spacing: 0.09em;
+}
+
+.material-grid {
+  display: grid;
+  gap: 9px;
+  margin-top: 10px;
+}
+
+.material-grid label {
+  display: grid;
+  gap: 5px;
+  color: #647984;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+}
+
+.material-grid input[type="color"] {
+  width: 100%;
+  height: 30px;
+  padding: 2px;
+  border: 1px solid #273842;
+  border-radius: 6px;
+  background: #0c1217;
+}
+
+.material-grid input[type="range"] {
+  width: 100%;
+}
+
+.bounds-readout {
+  margin-top: 12px;
+  padding: 8px;
+  border-radius: 6px;
+  background: #0c1217;
+  color: #60747f;
+  font: 8px ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.06em;
+}
+
+.reset-edits {
+  width: 100%;
+  margin-top: 9px;
+}
+
+.project-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.project-actions button.wide {
+  grid-column: 1 / -1;
+  border-color: #3e6170;
+  color: #92cedd;
+}
+
+.project-status {
+  margin-top: 9px;
+  color: #74c6a9;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+}
+
+@media (max-width: 720px) {
+  .viewport-tool-badge {
+    top: 48px;
+    right: 10px;
+  }
+}
