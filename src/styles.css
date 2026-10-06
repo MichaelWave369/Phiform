@@ -603,3 +603,134 @@ textarea:focus {
     display: none;
   }
 }
+
+
+.mode-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.mode-switch button,
+.connect {
+  border: 1px solid #263640;
+  border-radius: 7px;
+  background: #0e151b;
+  color: #708692;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  padding: 8px 9px;
+  cursor: pointer;
+}
+
+.mode-switch button.active {
+  border-color: #4c8ba0;
+  background: #13242c;
+  color: #9ce6f5;
+}
+
+.bridge-config {
+  margin-top: 10px;
+}
+
+.bridge-config input,
+.bridge-config select {
+  width: 100%;
+  border: 1px solid #25333f;
+  border-radius: 8px;
+  outline: none;
+  background: #0a0f14;
+  color: #bcd0da;
+  padding: 9px 10px;
+  font-size: 10px;
+}
+
+.bridge-config select {
+  margin-bottom: 2px;
+}
+
+.bridge-config input:focus,
+.bridge-config select:focus {
+  border-color: #53879a;
+}
+
+.bridge-config .field-label {
+  margin-top: 10px;
+}
+
+.connect {
+  width: 100%;
+  margin-top: 7px;
+}
+
+.connect:hover:not(:disabled) {
+  color: #a9ebf8;
+  border-color: #406879;
+}
+
+.connect:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.bridge-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 9px;
+  color: #5f6c74;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+}
+
+.bridge-state span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.bridge-state.online {
+  color: #77d8b7;
+}
+
+.bridge-state.error {
+  color: #d68f8f;
+}
+
+.bridge-state.checking {
+  color: #d6c98f;
+}
+
+.error-strip {
+  margin-top: 10px;
+  padding: 9px 10px;
+  border: 1px solid #5c3037;
+  border-radius: 8px;
+  background: #1b1014;
+  color: #dca6ad;
+  font-size: 9px;
+  line-height: 1.45;
+}
+
+.viewport-state {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 8px 10px;
+  border: 1px solid #27414c;
+  border-radius: 7px;
+  background: rgba(5, 9, 13, 0.86);
+  color: #91dbea;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  pointer-events: none;
+}
+
+.viewport-state.error {
+  border-color: #5b3439;
+  color: #e0a5ac;
+}
