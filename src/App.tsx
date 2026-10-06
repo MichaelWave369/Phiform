@@ -1,7 +1,27 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Viewport } from './components/Viewport'
+import {
+  createPortableProject,
+  downloadPortableProject,
+  loadProjectFromBrowser,
+  readPortableProject,
+  saveProjectToBrowser,
+} from './core/projectStore'
 import { receiptChecksum, receiptText } from './core/receipt'
-import type { GenerationReceipt, ImageSource, ModelArtifact } from './core/types'
+import type {
+  GenerationReceipt,
+  ImageSource,
+  MeshStats,
+  ModelArtifact,
+  TransformMode,
+  Vec3Tuple,
+  WorkspaceEditState,
+} from './core/types'
+import {
+  defaultWorkspaceEdits,
+  degrees,
+  radians,
+} from './core/workspace'
 import type { BridgeBackend } from './neural/bridgeTypes'
 import { LocalBridgeAdapter } from './neural/localBridgeAdapter'
 import { LocalBridgeClient } from './neural/localBridgeClient'
@@ -18,10 +38,31 @@ const initialArtifact: ModelArtifact = {
   createdAt: new Date().toISOString(),
 }
 
+const emptyStats: MeshStats = {
+  meshes: 0,
+  vertices: 0,
+  triangles: 0,
+  materials: 0,
+  bounds: [0, 0, 0],
+}
+
 function bytes(value: number): string {
   if (value < 1024) return `${value} B`
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`
   return `${(value / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function safeName(value: string): string {
+  return value.trim().replace(/[^a-z0-9_-]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'phiform-model'
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.click()
+  URL.revokeObjectURL(url)
 }
 
 export function App() {
@@ -30,6 +71,11 @@ export function App() {
   const [imageFile, setImageFile] = useState<File | undefined>()
   const [artifact, setArtifact] = useState<ModelArtifact>(initialArtifact)
   const [receipts, setReceipts] = useState<GenerationReceipt[]>([])
+  const [edits, setEdits] = useState<WorkspaceEditState>(defaultWorkspaceEdits)
+  const [meshStats, setMeshStats] = useState<MeshStats>(emptyStats)
+  const [transformMode, setTransformMode] = useState<TransformMode>('translate')
+  const [selected, setSelected] = useState(true)
+  const [exportRequest, setExportRequest] = useState(0)
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState(false)
   const [mode, setMode] = useState<'proof' | 'bridge'>('proof')
@@ -38,6 +84,8 @@ export function App() {
   const [backendId, setBackendId] = useState('')
   const [bridgeStatus, setBridgeStatus] = useState<'idle' | 'checking' | 'online' | 'error'>('idle')
   const [error, setError] = useState('')
+  const [projectStatus, setProjectStatus] = useState('')
+  const importRef = useRef<HTMLInputElement>(null)
 
   const latestReceipt = receipts[0]
   const checksum = useMemo(
@@ -91,6 +139,9 @@ export function App() {
       const result = await adapter.generate({ prompt, image }, { imageFile })
       setArtifact(result.artifact)
       setReceipts((current) => [result.receipt, ...current].slice(0, 12))
+      setEdits(defaultWorkspaceEdits())
+      setSelected(true)
+      setProjectStatus('')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Generation failed.')
     } finally {
@@ -114,11 +165,103 @@ export function App() {
     window.setTimeout(() => setCopied(false), 1200)
   }
 
+  const updateVector = (
+    field: 'position' | 'rotation' | 'scale',
+    index: number,
+    value: number,
+  ) => {
+    setEdits((current) => {
+      const next = [...current[field]] as Vec3Tuple
+      next[index] = field === 'rotation' ? radians(value) : value
+      return {
+        ...current,
+        [field]: next,
+        revision: current.revision + 1,
+      }
+    })
+  }
+
+  const resetEdits = () => {
+    setEdits(defaultWorkspaceEdits())
+    setSelected(true)
+  }
+
+  const saveLocal = async () => {
+    setProjectStatus('SAVING…')
+    setError('')
+    try {
+      await saveProjectToBrowser(artifact, edits, latestReceipt)
+      setProjectStatus('SAVED LOCALLY')
+    } catch (cause) {
+      setProjectStatus('')
+      setError(cause instanceof Error ? cause.message : 'Project save failed.')
+    }
+  }
+
+  const loadLocal = async () => {
+    setProjectStatus('LOADING…')
+    setError('')
+    try {
+      const project = await loadProjectFromBrowser()
+      setArtifact(project.artifact)
+      setEdits(project.edits)
+      setReceipts(project.latestReceipt ? [project.latestReceipt] : [])
+      setSelected(true)
+      setProjectStatus('LOCAL PROJECT LOADED')
+    } catch (cause) {
+      setProjectStatus('')
+      setError(cause instanceof Error ? cause.message : 'Project load failed.')
+    }
+  }
+
+  const exportProject = async () => {
+    setProjectStatus('PACKING PROJECT…')
+    setError('')
+    try {
+      const project = await createPortableProject(artifact, edits, latestReceipt)
+      downloadPortableProject(project)
+      setProjectStatus('PROJECT EXPORTED')
+    } catch (cause) {
+      setProjectStatus('')
+      setError(cause instanceof Error ? cause.message : 'Project export failed.')
+    }
+  }
+
+  const importProject = async (file?: File) => {
+    if (!file) return
+    setProjectStatus('IMPORTING…')
+    setError('')
+    try {
+      const project = await readPortableProject(file)
+      setArtifact(project.artifact)
+      setEdits(project.edits)
+      setReceipts(project.latestReceipt ? [project.latestReceipt] : [])
+      setSelected(true)
+      setProjectStatus('PROJECT IMPORTED')
+    } catch (cause) {
+      setProjectStatus('')
+      setError(cause instanceof Error ? cause.message : 'Project import failed.')
+    }
+  }
+
   const artifactType = artifact.kind === 'glb' ? 'GLB' : artifact.primitive
-  const artifactDetail =
-    artifact.kind === 'glb'
-      ? artifact.backendId
-      : artifact.scale.map((value) => value.toFixed(2)).join(' / ')
+  const artifactDetail = artifact.kind === 'glb'
+    ? artifact.backendId
+    : artifact.scale.map((value) => value.toFixed(2)).join(' / ')
+
+  const vectorFields: Array<{
+    key: 'position' | 'rotation' | 'scale'
+    label: string
+    values: Vec3Tuple
+  }> = [
+    { key: 'position', label: 'POSITION', values: edits.position },
+    {
+      key: 'rotation',
+      label: 'ROTATION °',
+      values: edits.rotation.map((value) => degrees(value)) as Vec3Tuple,
+    },
+    { key: 'scale', label: 'SCALE', values: edits.scale },
+  ]
 
   return (
     <main className="app-shell">
@@ -132,8 +275,8 @@ export function App() {
         </div>
 
         <div className="top-status">
-          <span className="pill"><i /> RUNG 3</span>
-          <span className="pill muted">AUTHORITY: WORKSPACE</span>
+          <span className="pill"><i /> RUNG 4</span>
+          <span className="pill muted">SOURCE IMMUTABLE · EDITS LAYERED</span>
         </div>
       </header>
 
@@ -143,7 +286,7 @@ export function App() {
             <span>01</span>
             <div>
               <h2>Intent</h2>
-              <p>Describe or attach a source.</p>
+              <p>Generate a source artifact, then edit it in the workspace.</p>
             </div>
           </div>
 
@@ -164,9 +307,7 @@ export function App() {
             <span className="upload-icon">+</span>
             <span>
               <strong>{image ? image.name : 'Attach reference image'}</strong>
-              <small>
-                {image ? `${image.type} · ${bytes(image.size)}` : 'PNG / JPG / WEBP'}
-              </small>
+              <small>{image ? `${image.type} · ${bytes(image.size)}` : 'PNG / JPG / WEBP'}</small>
             </span>
           </label>
 
@@ -179,32 +320,14 @@ export function App() {
           <div className="adapter-card">
             <span className="eyebrow">INFERENCE PATH</span>
             <div className="mode-switch">
-              <button
-                className={mode === 'proof' ? 'active' : ''}
-                onClick={() => setMode('proof')}
-              >
-                PROOF
-              </button>
-              <button
-                className={mode === 'bridge' ? 'active' : ''}
-                onClick={() => setMode('bridge')}
-              >
-                LOCAL BRIDGE
-              </button>
+              <button className={mode === 'proof' ? 'active' : ''} onClick={() => setMode('proof')}>PROOF</button>
+              <button className={mode === 'bridge' ? 'active' : ''} onClick={() => setMode('bridge')}>LOCAL BRIDGE</button>
             </div>
 
             {mode === 'proof' ? (
               <>
                 <strong>{mockAdapter.label}</strong>
-                <p>
-                  Deterministic procedural path. No neural inference is claimed.
-                </p>
-                <div className="capabilities">
-                  <span>TEXT</span>
-                  <span>LOCAL</span>
-                  <span className="off">IMAGE PIXELS</span>
-                  <span className="off">GLB OUT</span>
-                </div>
+                <p>Deterministic procedural path. No neural inference is claimed.</p>
               </>
             ) : (
               <div className="bridge-config">
@@ -220,18 +343,13 @@ export function App() {
                 </button>
 
                 <div className={`bridge-state ${bridgeStatus}`}>
-                  <span />
-                  {bridgeStatus.toUpperCase()}
+                  <span />{bridgeStatus.toUpperCase()}
                 </div>
 
                 {availableBackends.length > 0 && (
                   <>
                     <label className="field-label" htmlFor="backend">BACKEND</label>
-                    <select
-                      id="backend"
-                      value={backendId}
-                      onChange={(event) => setBackendId(event.target.value)}
-                    >
+                    <select id="backend" value={backendId} onChange={(event) => setBackendId(event.target.value)}>
                       {availableBackends.map((backend) => (
                         <option key={backend.id} value={backend.id}>
                           {backend.label} · {backend.kind}
@@ -239,18 +357,10 @@ export function App() {
                       ))}
                     </select>
                     {selectedBackend && (
-                      <>
-                        <p>
-                          {selectedBackend.model ?? selectedBackend.id}
-                          {selectedBackend.license ? ` · ${selectedBackend.license}` : ''}
-                        </p>
-                        <div className="capabilities">
-                          <span className={selectedBackend.capabilities.textTo3D ? '' : 'off'}>TEXT</span>
-                          <span className={selectedBackend.capabilities.imageTo3D ? '' : 'off'}>IMAGE</span>
-                          <span className={selectedBackend.capabilities.multiView ? '' : 'off'}>MULTI-VIEW</span>
-                          <span className={selectedBackend.capabilities.glbOutput ? '' : 'off'}>GLB</span>
-                        </div>
-                      </>
+                      <p>
+                        {selectedBackend.model ?? selectedBackend.id}
+                        {selectedBackend.license ? ` · ${selectedBackend.license}` : ''}
+                      </p>
                     )}
                   </>
                 )}
@@ -272,8 +382,7 @@ export function App() {
           {error && <div className="error-strip">{error}</div>}
 
           <button className="generate" disabled={busy} onClick={generate}>
-            <span>{busy ? 'FORMING…' : 'GENERATE FORM'}</span>
-            <b>↗</b>
+            <span>{busy ? 'FORMING…' : 'GENERATE FORM'}</span><b>↗</b>
           </button>
         </aside>
 
@@ -282,7 +391,23 @@ export function App() {
             <span>ARTIFACT / {artifact.id.slice(0, 22)}</span>
             <span>{latestReceipt?.seedKind === 'request-fingerprint' ? 'TRACE' : 'SEED'} {artifact.seed}</span>
           </div>
-          <Viewport artifact={artifact} />
+
+          <Viewport
+            artifact={artifact}
+            edits={edits}
+            transformMode={transformMode}
+            selected={selected}
+            exportRequest={exportRequest}
+            onSelectedChange={setSelected}
+            onEditsChange={setEdits}
+            onStatsChange={setMeshStats}
+            onExportComplete={(blob) => {
+              downloadBlob(blob, `${safeName(artifact.label)}-edited.glb`)
+              setProjectStatus('EDITED GLB EXPORTED')
+            }}
+            onError={setError}
+          />
+
           <div className="stage-footer">
             <div>
               <span className="eyebrow">CURRENT FORM</span>
@@ -290,17 +415,9 @@ export function App() {
             </div>
             <div className="stage-stats">
               <span>{artifactType}</span>
-              {artifact.kind === 'primitive' ? (
-                <>
-                  <span>{artifact.material.metalness.toFixed(2)} metal</span>
-                  <span>{artifact.material.roughness.toFixed(2)} rough</span>
-                </>
-              ) : (
-                <>
-                  <span>{artifact.byteLength ? bytes(artifact.byteLength) : 'size unknown'}</span>
-                  <span>{artifact.sha256 ? `sha256 ${artifact.sha256.slice(0, 10)}…` : 'hash absent'}</span>
-                </>
-              )}
+              <span>{meshStats.meshes} meshes</span>
+              <span>{meshStats.triangles.toLocaleString()} tris</span>
+              <span>rev {edits.revision}</span>
             </div>
           </div>
         </section>
@@ -309,66 +426,190 @@ export function App() {
           <div className="panel-heading">
             <span>02</span>
             <div>
-              <h2>Evidence</h2>
-              <p>Artifact state and generation lineage.</p>
+              <h2>Workspace</h2>
+              <p>Non-destructive edits over the source artifact.</p>
             </div>
           </div>
 
           <div className="metric-grid">
-            <div>
-              <span>TYPE</span>
-              <strong>{artifactType}</strong>
+            <div><span>TYPE</span><strong>{artifactType}</strong></div>
+            <div><span>{artifact.kind === 'glb' ? 'BACKEND' : 'SOURCE SCALE'}</span><strong>{artifactDetail}</strong></div>
+            <div><span>VERTICES</span><strong>{meshStats.vertices.toLocaleString()}</strong></div>
+            <div><span>TRIANGLES</span><strong>{meshStats.triangles.toLocaleString()}</strong></div>
+            <div><span>MESHES</span><strong>{meshStats.meshes}</strong></div>
+            <div><span>MATERIALS</span><strong>{meshStats.materials}</strong></div>
+          </div>
+
+          <div className="editor-card">
+            <div className="editor-head">
+              <span className="eyebrow">TRANSFORM</span>
+              <button onClick={() => setSelected((value) => !value)}>
+                {selected ? 'DESELECT' : 'SELECT'}
+              </button>
             </div>
-            <div>
-              <span>{artifact.kind === 'glb' ? 'BACKEND' : 'SCALE'}</span>
-              <strong>{artifactDetail}</strong>
+
+            <div className="tool-tabs">
+              {(['translate', 'rotate', 'scale'] as TransformMode[]).map((tool) => (
+                <button
+                  key={tool}
+                  className={transformMode === tool ? 'active' : ''}
+                  onClick={() => {
+                    setTransformMode(tool)
+                    setSelected(true)
+                  }}
+                >
+                  {tool.toUpperCase()}
+                </button>
+              ))}
             </div>
-            <div>
-              <span>ADAPTER</span>
-              <strong>{latestReceipt?.adapterId ?? 'bootstrap'}</strong>
+
+            {vectorFields.map((field) => (
+              <div className="vector-row" key={field.key}>
+                <span>{field.label}</span>
+                <div>
+                  {field.values.map((value, index) => (
+                    <input
+                      key={index}
+                      aria-label={`${field.label} ${['X', 'Y', 'Z'][index]}`}
+                      type="number"
+                      step={field.key === 'rotation' ? 1 : 0.05}
+                      value={Number(value.toFixed(field.key === 'rotation' ? 1 : 3))}
+                      onChange={(event) => updateVector(field.key, index, Number(event.target.value))}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            <div className="material-edit">
+              <label>
+                <input
+                  type="checkbox"
+                  checked={edits.material.enabled}
+                  onChange={(event) =>
+                    setEdits((current) => ({
+                      ...current,
+                      material: { ...current.material, enabled: event.target.checked },
+                      revision: current.revision + 1,
+                    }))
+                  }
+                />
+                MATERIAL OVERRIDE
+              </label>
+
+              <div className="material-grid">
+                <label>
+                  COLOR
+                  <input
+                    type="color"
+                    value={edits.material.color}
+                    disabled={!edits.material.enabled}
+                    onChange={(event) =>
+                      setEdits((current) => ({
+                        ...current,
+                        material: { ...current.material, color: event.target.value },
+                        revision: current.revision + 1,
+                      }))
+                    }
+                  />
+                </label>
+
+                <label>
+                  METAL {edits.material.metalness.toFixed(2)}
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    disabled={!edits.material.enabled}
+                    value={edits.material.metalness}
+                    onChange={(event) =>
+                      setEdits((current) => ({
+                        ...current,
+                        material: { ...current.material, metalness: Number(event.target.value) },
+                        revision: current.revision + 1,
+                      }))
+                    }
+                  />
+                </label>
+
+                <label>
+                  ROUGH {edits.material.roughness.toFixed(2)}
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    disabled={!edits.material.enabled}
+                    value={edits.material.roughness}
+                    onChange={(event) =>
+                      setEdits((current) => ({
+                        ...current,
+                        material: { ...current.material, roughness: Number(event.target.value) },
+                        revision: current.revision + 1,
+                      }))
+                    }
+                  />
+                </label>
+              </div>
             </div>
-            <div>
-              <span>RECEIPTS</span>
-              <strong>{receipts.length}</strong>
+
+            <div className="bounds-readout">
+              BOUNDS · {meshStats.bounds.map((value) => value.toFixed(2)).join(' × ')}
             </div>
+
+            <button className="reset-edits" onClick={resetEdits}>RESET EDIT LAYER</button>
+          </div>
+
+          <div className="project-card">
+            <span className="eyebrow">PROJECT + EXPORT</span>
+            <div className="project-actions">
+              <button onClick={saveLocal}>SAVE LOCAL</button>
+              <button onClick={loadLocal}>LOAD LOCAL</button>
+              <button onClick={exportProject}>EXPORT .PHIFORM</button>
+              <button onClick={() => importRef.current?.click()}>IMPORT .PHIFORM</button>
+              <button className="wide" onClick={() => setExportRequest((value) => value + 1)}>
+                EXPORT EDITED GLB
+              </button>
+            </div>
+            <input
+              ref={importRef}
+              type="file"
+              accept=".json,.phiform.json,application/json"
+              hidden
+              onChange={(event) => {
+                void importProject(event.target.files?.[0])
+                event.currentTarget.value = ''
+              }}
+            />
+            {projectStatus && <div className="project-status">{projectStatus}</div>}
           </div>
 
           <div className="receipt">
             <div className="receipt-head">
               <div>
-                <span className="eyebrow">LATEST RECEIPT</span>
-                <strong>{latestReceipt?.id ?? 'No generation yet'}</strong>
+                <span className="eyebrow">SOURCE RECEIPT</span>
+                <strong>{latestReceipt?.id ?? 'No generation receipt'}</strong>
               </div>
               <button disabled={!latestReceipt} onClick={copyReceipt}>
                 {copied ? 'COPIED' : 'COPY'}
               </button>
             </div>
-
             <dl>
-              <div><dt>schema</dt><dd>{latestReceipt?.schema ?? '—'}</dd></div>
-              <div><dt>status</dt><dd>{latestReceipt?.status ?? '—'}</dd></div>
+              <div><dt>adapter</dt><dd>{latestReceipt?.adapterId ?? '—'}</dd></div>
               <div><dt>job</dt><dd>{latestReceipt?.jobId ?? '—'}</dd></div>
-              <div><dt>seed kind</dt><dd>{latestReceipt?.seedKind ?? 'inference / local'}</dd></div>
               <div><dt>sha256</dt><dd>{latestReceipt?.output?.sha256 ?? '—'}</dd></div>
-              <div><dt>checksum</dt><dd>{checksum}</dd></div>
+              <div><dt>receipt</dt><dd>{checksum}</dd></div>
+              <div><dt>edit rev</dt><dd>{edits.revision}</dd></div>
             </dl>
           </div>
 
           <div className="authority-note">
-            <span>CAPABILITY ≠ AUTHORITY</span>
+            <span>SOURCE ≠ EDIT LAYER</span>
             <p>
-              Local backends return candidate artifacts. PhiForm decides what enters
-              workspace state and records the backend, job, hash, and caveats.
-            </p>
-          </div>
-
-          <div className="roadmap-mini">
-            <span className="eyebrow">RUNG 3 NEURAL PATH</span>
-            <strong>Image → SF3D → textured GLB</strong>
-            <p>
-              Stable Fast 3D appears as a neural backend only when the local bridge can
-              see an operator-installed checkout. Missing model setup stays visible
-              instead of being silently downgraded to proof geometry.
+              PhiForm keeps neural/proof source provenance intact. Workspace transforms
+              and material changes are explicit edits and only become baked geometry when
+              you export an edited GLB.
             </p>
           </div>
         </aside>
