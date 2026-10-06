@@ -96,3 +96,40 @@ The local receipt checksum remains a lightweight UI integrity marker. It is not 
 The localhost bridge is a capability boundary, not an authority transfer.
 
 A real backend may run native code, large model weights, CUDA workloads, or Python environments. Keeping that machinery behind the bridge lets the web studio remain small and auditable while preserving explicit backend identity.
+
+
+## Rung 3 — first neural backend
+
+Stable Fast 3D is integrated as an optional bridge backend rather than a browser dependency.
+
+```text
+PhiForm browser
+    |
+    v
+LocalBridgeAdapter
+    |
+    v
+bridge/dev-server.mjs
+    |
+    +-- dev.glb-proof.v1
+    |
+    +-- stability.sf3d.v1
+            |
+            v
+      operator-installed
+      Stable Fast 3D
+      official run.py
+            |
+            v
+      output/0/mesh.glb
+            |
+      validate framing
+      SHA-256 exact bytes
+            |
+            v
+      workspace candidate
+```
+
+The bridge reports SF3D as unavailable when its local checkout is not configured. This keeps model installation, gated access, native dependencies, and third-party license terms outside PhiForm's MIT distribution.
+
+CI qualifies the external process and GLB handoff using a CLI-shape fixture. It does not claim a neural model run.
