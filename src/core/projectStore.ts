@@ -1,7 +1,10 @@
+import { createEditGraph } from './editGraph'
 import type {
+  EditGraph,
   GenerationReceipt,
   ModelArtifact,
   PortableProject,
+  PortableProjectV1,
   WorkspaceEditState,
 } from './types'
 
@@ -11,7 +14,7 @@ const LAST_PROJECT = 'last'
 
 interface StoredProjectRecord {
   key: string
-  project: PortableProject
+  project: PortableProject | PortableProjectV1
   glb?: ArrayBuffer
 }
 
@@ -74,10 +77,36 @@ function manifestArtifact(artifact: ModelArtifact): ModelArtifact {
   }
 }
 
+function normalizeProject(
+  project: PortableProject | PortableProjectV1,
+): PortableProject {
+  if (project.schema === 'phiform.project.v2') {
+    if (project.editGraph?.schema !== 'phiform.edit-graph.v1') {
+      throw new Error('PhiForm project v2 is missing a valid edit graph.')
+    }
+    return project
+  }
+
+  return {
+    schema: 'phiform.project.v2',
+    savedAt: project.savedAt,
+    artifact: project.artifact,
+    edits: project.edits,
+    editGraph: createEditGraph(
+      project.artifact,
+      project.edits,
+      project.latestReceipt,
+    ),
+    latestReceipt: project.latestReceipt,
+    glbBase64: project.glbBase64,
+  }
+}
+
 function hydrateProject(
-  project: PortableProject,
+  input: PortableProject | PortableProjectV1,
   glb?: ArrayBuffer,
 ): PortableProject {
+  const project = normalizeProject(input)
   if (project.artifact.kind !== 'glb') return project
   if (!glb) {
     throw new Error('Project references a GLB artifact but contains no persisted bytes.')
@@ -97,14 +126,16 @@ function hydrateProject(
 export async function saveProjectToBrowser(
   artifact: ModelArtifact,
   edits: WorkspaceEditState,
+  editGraph: EditGraph,
   latestReceipt?: GenerationReceipt,
 ): Promise<void> {
   const glb = await fetchGlb(artifact)
   const project: PortableProject = {
-    schema: 'phiform.project.v1',
+    schema: 'phiform.project.v2',
     savedAt: new Date().toISOString(),
     artifact: manifestArtifact(artifact),
     edits,
+    editGraph,
     latestReceipt,
   }
 
@@ -143,14 +174,16 @@ export async function loadProjectFromBrowser(): Promise<PortableProject> {
 export async function createPortableProject(
   artifact: ModelArtifact,
   edits: WorkspaceEditState,
+  editGraph: EditGraph,
   latestReceipt?: GenerationReceipt,
 ): Promise<PortableProject> {
   const glb = await fetchGlb(artifact)
   return {
-    schema: 'phiform.project.v1',
+    schema: 'phiform.project.v2',
     savedAt: new Date().toISOString(),
     artifact: manifestArtifact(artifact),
     edits,
+    editGraph,
     latestReceipt,
     glbBase64: glb ? arrayBufferToBase64(glb) : undefined,
   }
@@ -175,13 +208,23 @@ export function downloadPortableProject(project: PortableProject): void {
 }
 
 export async function readPortableProject(file: File): Promise<PortableProject> {
-  const parsed = JSON.parse(await file.text()) as Partial<PortableProject>
+  const parsed = JSON.parse(await file.text()) as
+    | Partial<PortableProject>
+    | Partial<PortableProjectV1>
 
-  if (parsed.schema !== 'phiform.project.v1' || !parsed.artifact || !parsed.edits) {
-    throw new Error('This file is not a PhiForm project v1 manifest.')
+  if (
+    (parsed.schema !== 'phiform.project.v1' &&
+      parsed.schema !== 'phiform.project.v2') ||
+    !parsed.artifact ||
+    !parsed.edits
+  ) {
+    throw new Error('This file is not a supported PhiForm project manifest.')
   }
 
-  const project = parsed as PortableProject
+  const project = normalizeProject(
+    parsed as PortableProject | PortableProjectV1,
+  )
+
   if (project.artifact.kind === 'glb') {
     if (!project.glbBase64) {
       throw new Error('Portable GLB project is missing embedded model bytes.')
