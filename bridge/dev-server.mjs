@@ -1,171 +1,16 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { createServer } from 'node:http'
+import { proofBackend } from './backends/proof.mjs'
+import { createSf3dBackend } from './backends/sf3d.mjs'
 
 const host = process.env.PHIFORM_BRIDGE_HOST || '127.0.0.1'
 const port = Number(process.env.PHIFORM_BRIDGE_PORT || 8787)
 const jobs = new Map()
 
-const backend = {
-  id: 'dev.glb-proof.v1',
-  label: 'Development GLB Proof',
-  kind: 'proof',
-  available: true,
-  model: 'PhiForm procedural cube generator',
-  license: 'MIT (PhiForm proof backend)',
-  capabilities: {
-    textTo3D: true,
-    imageTo3D: false,
-    multiView: false,
-    glbOutput: true,
-  },
-}
-
-function hashText(value) {
-  let hash = 2166136261
-  for (let i = 0; i < value.length; i += 1) {
-    hash ^= value.charCodeAt(i)
-    hash = Math.imul(hash, 16777619)
-  }
-  return hash >>> 0
-}
-
-function pad4(buffer, fill = 0) {
-  const padding = (4 - (buffer.length % 4)) % 4
-  return padding === 0 ? buffer : Buffer.concat([buffer, Buffer.alloc(padding, fill)])
-}
-
-function createCubeGlb(seed) {
-  const positions = new Float32Array([
-    -1,-1, 1,  1,-1, 1,  1, 1, 1, -1, 1, 1,
-     1,-1,-1, -1,-1,-1, -1, 1,-1,  1, 1,-1,
-    -1, 1, 1,  1, 1, 1,  1, 1,-1, -1, 1,-1,
-    -1,-1,-1,  1,-1,-1,  1,-1, 1, -1,-1, 1,
-     1,-1, 1,  1,-1,-1,  1, 1,-1,  1, 1, 1,
-    -1,-1,-1, -1,-1, 1, -1, 1, 1, -1, 1,-1,
-  ])
-
-  const normals = new Float32Array([
-     0, 0, 1,  0, 0, 1,  0, 0, 1,  0, 0, 1,
-     0, 0,-1,  0, 0,-1,  0, 0,-1,  0, 0,-1,
-     0, 1, 0,  0, 1, 0,  0, 1, 0,  0, 1, 0,
-     0,-1, 0,  0,-1, 0,  0,-1, 0,  0,-1, 0,
-     1, 0, 0,  1, 0, 0,  1, 0, 0,  1, 0, 0,
-    -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
-  ])
-
-  const indices = new Uint16Array([
-     0, 1, 2,  0, 2, 3,
-     4, 5, 6,  4, 6, 7,
-     8, 9,10,  8,10,11,
-    12,13,14, 12,14,15,
-    16,17,18, 16,18,19,
-    20,21,22, 20,22,23,
-  ])
-
-  const positionBytes = Buffer.from(
-    positions.buffer,
-    positions.byteOffset,
-    positions.byteLength,
-  )
-  const normalBytes = Buffer.from(
-    normals.buffer,
-    normals.byteOffset,
-    normals.byteLength,
-  )
-  const indexBytes = Buffer.from(
-    indices.buffer,
-    indices.byteOffset,
-    indices.byteLength,
-  )
-  const binary = Buffer.concat([positionBytes, normalBytes, indexBytes])
-
-  const tint = [
-    0.35 + ((seed >>> 2) % 45) / 100,
-    0.45 + ((seed >>> 8) % 35) / 100,
-    0.55 + ((seed >>> 14) % 35) / 100,
-    1,
-  ]
-
-  const gltf = {
-    asset: { version: '2.0', generator: 'PhiForm dev.glb-proof.v1' },
-    scene: 0,
-    scenes: [{ nodes: [0] }],
-    nodes: [{ mesh: 0, name: 'PhiFormProofCube' }],
-    meshes: [{
-      primitives: [{
-        attributes: { POSITION: 0, NORMAL: 1 },
-        indices: 2,
-        material: 0,
-      }],
-    }],
-    materials: [{
-      name: 'PhiFormProofMaterial',
-      pbrMetallicRoughness: {
-        baseColorFactor: tint,
-        metallicFactor: 0.35,
-        roughnessFactor: 0.42,
-      },
-    }],
-    accessors: [
-      {
-        bufferView: 0,
-        componentType: 5126,
-        count: 24,
-        type: 'VEC3',
-        min: [-1, -1, -1],
-        max: [1, 1, 1],
-      },
-      {
-        bufferView: 1,
-        componentType: 5126,
-        count: 24,
-        type: 'VEC3',
-      },
-      {
-        bufferView: 2,
-        componentType: 5123,
-        count: 36,
-        type: 'SCALAR',
-      },
-    ],
-    bufferViews: [
-      { buffer: 0, byteOffset: 0, byteLength: positionBytes.length, target: 34962 },
-      {
-        buffer: 0,
-        byteOffset: positionBytes.length,
-        byteLength: normalBytes.length,
-        target: 34962,
-      },
-      {
-        buffer: 0,
-        byteOffset: positionBytes.length + normalBytes.length,
-        byteLength: indexBytes.length,
-        target: 34963,
-      },
-    ],
-    buffers: [{ byteLength: binary.length }],
-  }
-
-  const json = pad4(Buffer.from(JSON.stringify(gltf)), 0x20)
-  const bin = pad4(binary, 0x00)
-  const totalLength = 12 + 8 + json.length + 8 + bin.length
-  const output = Buffer.alloc(totalLength)
-  let offset = 0
-
-  output.writeUInt32LE(0x46546c67, offset); offset += 4
-  output.writeUInt32LE(2, offset); offset += 4
-  output.writeUInt32LE(totalLength, offset); offset += 4
-
-  output.writeUInt32LE(json.length, offset); offset += 4
-  output.writeUInt32LE(0x4e4f534a, offset); offset += 4
-  json.copy(output, offset); offset += json.length
-
-  output.writeUInt32LE(bin.length, offset); offset += 4
-  output.writeUInt32LE(0x004e4942, offset); offset += 4
-  bin.copy(output, offset)
-
-  return output
-}
+const implementations = [
+  proofBackend,
+  createSf3dBackend(process.env),
+]
 
 function cors(res) {
   res.setHeader('access-control-allow-origin', '*')
@@ -198,6 +43,7 @@ function publicJob(job) {
     backendId: job.backendId,
     status: job.status,
     seed: job.seed,
+    seedKind: job.seedKind,
     createdAt: job.createdAt,
     ...(job.status === 'succeeded'
       ? {
@@ -211,6 +57,30 @@ function publicJob(job) {
           notes: job.notes,
         }
       : {}),
+    ...(job.status === 'failed' ? { error: job.error } : {}),
+  }
+}
+
+function backendById(id) {
+  return implementations.find((item) => item.descriptor.id === id)
+}
+
+async function executeJob(job, implementation, body) {
+  job.status = 'running'
+  try {
+    const result = await implementation.run(body, { jobId: job.id })
+    job.buffer = result.buffer
+    job.seed = result.seed
+    job.seedKind = result.seedKind || 'request-fingerprint'
+    job.sha256 = createHash('sha256').update(result.buffer).digest('hex')
+    job.notes = [
+      ...(result.notes || []),
+      'Artifact hash is SHA-256 over the exact served GLB bytes.',
+    ]
+    job.status = 'succeeded'
+  } catch (error) {
+    job.status = 'failed'
+    job.error = error instanceof Error ? error.message : 'backend execution failed'
   }
 }
 
@@ -229,67 +99,55 @@ const server = createServer(async (req, res) => {
       json(res, 200, {
         schema: 'phiform.bridge.health.v1',
         status: 'ok',
-        bridgeVersion: '0.2.0',
+        bridgeVersion: '0.3.0',
       })
       return
     }
 
     if (req.method === 'GET' && url.pathname === '/v1/backends') {
-      json(res, 200, { backends: [backend] })
+      json(res, 200, { backends: implementations.map((item) => item.descriptor) })
       return
     }
 
     if (req.method === 'POST' && url.pathname === '/v1/jobs') {
       const body = await readJson(req)
+      const implementation = backendById(body.backendId)
 
-      if (body.backendId !== backend.id) {
-        json(res, 400, { error: 'unknown or unavailable backend' })
+      if (!implementation) {
+        json(res, 400, { error: 'unknown backend' })
         return
       }
 
-      if (!String(body.prompt || '').trim() && !body.image) {
-        json(res, 400, { error: 'prompt or image input is required' })
-        return
-      }
-
-      if (body.image && backend.capabilities.imageTo3D === false) {
+      if (!implementation.descriptor.available) {
         json(res, 400, {
-          error: 'development proof backend does not declare image-to-3D capability',
+          error: implementation.descriptor.statusReason || 'backend unavailable',
         })
         return
       }
 
-      const seed = hashText([
-        String(body.prompt || ''),
-        String(body.image?.name || ''),
-        String(body.image?.size || 0),
-      ].join('|') || 'phiform')
-      const buffer = createCubeGlb(seed)
+      const validationError = implementation.validate(body)
+      if (validationError) {
+        json(res, 400, { error: validationError })
+        return
+      }
+
       const id = randomUUID()
       const job = {
         id,
-        backendId: backend.id,
+        backendId: implementation.descriptor.id,
         status: 'queued',
-        seed,
+        seed: 0,
+        seedKind: 'request-fingerprint',
         createdAt: new Date().toISOString(),
-        buffer,
-        sha256: createHash('sha256').update(buffer).digest('hex'),
-        notes: [
-          'Development GLB proof backend.',
-          'No neural inference was performed.',
-          'Artifact hash is SHA-256 over the served GLB bytes.',
-        ],
+        buffer: Buffer.alloc(0),
+        sha256: '',
+        notes: [],
       }
 
       jobs.set(id, job)
-      setTimeout(() => {
-        const current = jobs.get(id)
-        if (current) current.status = 'running'
-      }, 30)
-      setTimeout(() => {
-        const current = jobs.get(id)
-        if (current) current.status = 'succeeded'
-      }, 120)
+      setImmediate(() => {
+        executeJob(job, implementation, body)
+      })
 
       json(res, 202, publicJob(job))
       return
@@ -313,6 +171,7 @@ const server = createServer(async (req, res) => {
         json(res, 404, { error: 'artifact not found' })
         return
       }
+
       cors(res)
       res.writeHead(200, {
         'content-type': 'model/gltf-binary',
@@ -332,7 +191,8 @@ const server = createServer(async (req, res) => {
 })
 
 server.listen(port, host, () => {
+  const available = implementations.filter((item) => item.descriptor.available)
   process.stdout.write(
-    `PhiForm local bridge listening on http://${host}:${port}\n`,
+    `PhiForm local bridge v0.3.0 listening on http://${host}:${port} · ${available.length}/${implementations.length} backends available\n`,
   )
 })
