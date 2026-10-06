@@ -35,6 +35,12 @@ export class LocalBridgeAdapter implements Neural3DAdapter {
     request: GenerationRequest,
     runtime?: GenerationRuntimeInputs,
   ): Promise<GenerationResult> {
+    if (!this.backend.available) {
+      throw new Error(
+        this.backend.statusReason || `${this.label} is not available on the local bridge.`,
+      )
+    }
+
     if (request.image && !runtime?.imageFile) {
       throw new Error('Image metadata is present but no image bytes were supplied.')
     }
@@ -85,6 +91,7 @@ export class LocalBridgeAdapter implements Neural3DAdapter {
         request,
         outputArtifactId: artifactId,
         seed: job.seed,
+        seedKind: job.seedKind,
         status: 'success',
         output: {
           format: 'glb',
@@ -93,6 +100,12 @@ export class LocalBridgeAdapter implements Neural3DAdapter {
         },
         notes: [
           ...(job.notes ?? []),
+          this.backend.model
+            ? `Backend model: ${this.backend.model}`
+            : 'Backend model identity was not reported.',
+          this.backend.sourceUrl
+            ? `Backend source: ${this.backend.sourceUrl}`
+            : 'Backend source URL was not reported.',
           this.backend.license
             ? `Backend license: ${this.backend.license}`
             : 'Backend license was not reported by the bridge.',
