@@ -5,7 +5,9 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { TransformControls } from 'three/addons/controls/TransformControls.js'
 import type {
+  EditTarget,
   MeshStats,
+  MeshTarget,
   ModelArtifact,
   PrimitiveKind,
   TransformMode,
@@ -73,6 +75,49 @@ function applyMaterialOverride(object: THREE.Object3D, edits: WorkspaceEditState
   })
 }
 
+function meshCounts(mesh: THREE.Mesh): { vertices: number; triangles: number } {
+  const position = mesh.geometry.getAttribute('position')
+  const vertices = position?.count ?? 0
+  const triangles = mesh.geometry.index
+    ? Math.floor(mesh.geometry.index.count / 3)
+    : Math.floor(vertices / 3)
+  return { vertices, triangles }
+}
+
+function indexMeshes(object: THREE.Object3D) {
+  let index = 0
+  object.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return
+    const meshId = `mesh-${String(index).padStart(3, '0')}`
+    child.userData.phiformMeshId = meshId
+    child.userData.phiformMeshName = child.name || `Mesh ${index + 1}`
+    index += 1
+  })
+}
+
+function targetForMesh(mesh: THREE.Mesh): MeshTarget {
+  const counts = meshCounts(mesh)
+  return {
+    id: String(mesh.userData.phiformMeshId || 'mesh-unknown'),
+    name: String(mesh.userData.phiformMeshName || mesh.name || 'Unnamed mesh'),
+    vertices: counts.vertices,
+    triangles: counts.triangles,
+  }
+}
+
+function findMeshByTarget(
+  object: THREE.Object3D,
+  target: EditTarget,
+): THREE.Mesh | null {
+  if (target.kind !== 'mesh') return null
+  let found: THREE.Mesh | null = null
+  object.traverse((child) => {
+    if (found || !(child instanceof THREE.Mesh)) return
+    if (child.userData.phiformMeshId === target.mesh.id) found = child
+  })
+  return found
+}
+
 function statsFor(object: THREE.Object3D): MeshStats {
   let meshes = 0
   let vertices = 0
@@ -82,14 +127,9 @@ function statsFor(object: THREE.Object3D): MeshStats {
   object.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return
     meshes += 1
-    const geometry = child.geometry
-    const position = geometry.getAttribute('position')
-    if (position) vertices += position.count
-    triangles += geometry.index
-      ? Math.floor(geometry.index.count / 3)
-      : position
-        ? Math.floor(position.count / 3)
-        : 0
+    const counts = meshCounts(child)
+    vertices += counts.vertices
+    triangles += counts.triangles
 
     const meshMaterials = Array.isArray(child.material) ? child.material : [child.material]
     meshMaterials.forEach((material) => materials.add(material))
@@ -113,8 +153,10 @@ interface ViewportProps {
   edits: WorkspaceEditState
   transformMode: TransformMode
   selected: boolean
+  target: EditTarget
   exportRequest: number
   onSelectedChange: (selected: boolean) => void
+  onTargetChange: (target: EditTarget) => void
   onEditsChange: (edits: WorkspaceEditState) => void
   onStatsChange: (stats: MeshStats) => void
   onExportComplete: (blob: Blob) => void
@@ -126,8 +168,10 @@ export function Viewport({
   edits,
   transformMode,
   selected,
+  target,
   exportRequest,
   onSelectedChange,
+  onTargetChange,
   onEditsChange,
   onStatsChange,
   onExportComplete,
@@ -135,10 +179,10 @@ export function Viewport({
 }: ViewportProps) {
   const hostRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<THREE.Scene | null>(null)
-  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
   const objectRef = useRef<THREE.Object3D | null>(null)
   const transformRef = useRef<TransformControls | null>(null)
   const helperRef = useRef<THREE.BoxHelper | null>(null)
+  const targetHelperRef = useRef<THREE.BoxHelper | null>(null)
   const applyingRef = useRef(false)
   const editsRef = useRef(edits)
   const exportSeenRef = useRef(0)
@@ -156,7 +200,6 @@ export function Viewport({
     const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100)
     camera.position.set(3.5, 2.6, 4.8)
     camera.lookAt(0, 0.25, 0)
-    cameraRef.current = camera
 
     const renderer = new THREE.WebGLRenderer({ antialias: true })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
@@ -213,8 +256,16 @@ export function Viewport({
       pointer.x = ((event.clientX - rect.left) / Math.max(rect.width, 1)) * 2 - 1
       pointer.y = -((event.clientY - rect.top) / Math.max(rect.height, 1)) * 2 + 1
       raycaster.setFromCamera(pointer, camera)
-      const hit = raycaster.intersectObject(objectRef.current, true).length > 0
-      onSelectedChange(hit)
+      const hits = raycaster.intersectObject(objectRef.current, true)
+      const mesh = hits.find((hit) => hit.object instanceof THREE.Mesh)?.object
+
+      if (mesh instanceof THREE.Mesh) {
+        onSelectedChange(true)
+        onTargetChange({ kind: 'mesh', mesh: targetForMesh(mesh) })
+      } else {
+        onSelectedChange(false)
+        onTargetChange({ kind: 'artifact' })
+      }
     }
     renderer.domElement.addEventListener('pointerdown', selectFromPointer)
 
@@ -234,6 +285,7 @@ export function Viewport({
       frame = requestAnimationFrame(animate)
       orbit.update()
       helperRef.current?.update()
+      targetHelperRef.current?.update()
       renderer.render(scene, camera)
     }
     animate()
@@ -246,14 +298,23 @@ export function Viewport({
       transform.detach()
       transform.dispose()
       if (objectRef.current) disposeObject(objectRef.current)
-      if (helperRef.current) scene.remove(helperRef.current)
+      if (helperRef.current) {
+        scene.remove(helperRef.current)
+        helperRef.current.geometry.dispose()
+        helperRef.current.material.dispose()
+      }
+      if (targetHelperRef.current) {
+        scene.remove(targetHelperRef.current)
+        targetHelperRef.current.geometry.dispose()
+        targetHelperRef.current.material.dispose()
+      }
       renderer.dispose()
       renderer.domElement.remove()
       sceneRef.current = null
-      cameraRef.current = null
       objectRef.current = null
       transformRef.current = null
       helperRef.current = null
+      targetHelperRef.current = null
     }
   }, [])
 
@@ -262,9 +323,7 @@ export function Viewport({
   }, [edits])
 
   useEffect(() => {
-    const transform = transformRef.current
-    if (!transform) return
-    transform.setMode(transformMode)
+    transformRef.current?.setMode(transformMode)
   }, [transformMode])
 
   useEffect(() => {
@@ -288,6 +347,26 @@ export function Viewport({
       helperRef.current = helper
     }
   }, [selected, artifact.id])
+
+  useEffect(() => {
+    const scene = sceneRef.current
+    const object = objectRef.current
+    if (!scene || !object) return
+
+    if (targetHelperRef.current) {
+      scene.remove(targetHelperRef.current)
+      targetHelperRef.current.geometry.dispose()
+      targetHelperRef.current.material.dispose()
+      targetHelperRef.current = null
+    }
+
+    const targetMesh = findMeshByTarget(object, target)
+    if (targetMesh) {
+      const helper = new THREE.BoxHelper(targetMesh, 0xb89cff)
+      scene.add(helper)
+      targetHelperRef.current = helper
+    }
+  }, [target, artifact.id])
 
   useEffect(() => {
     const object = objectRef.current
@@ -314,6 +393,7 @@ export function Viewport({
     }
 
     const install = (object: THREE.Object3D) => {
+      indexMeshes(object)
       rememberBaseMaterial(object)
       object.position.set(...edits.position)
       object.rotation.set(...edits.rotation)
@@ -324,6 +404,10 @@ export function Viewport({
       onStatsChange(statsFor(object))
       setLoadState('ready')
       onSelectedChange(true)
+
+      if (target.kind === 'mesh' && !findMeshByTarget(object, target)) {
+        onTargetChange({ kind: 'artifact' })
+      }
     }
 
     if (artifact.kind === 'primitive') {
@@ -333,6 +417,7 @@ export function Viewport({
         roughness: artifact.material.roughness,
       })
       const mesh = new THREE.Mesh(geometryFor(artifact.primitive), material)
+      mesh.name = artifact.label
       install(mesh)
       return
     }
@@ -382,8 +467,7 @@ export function Viewport({
       return
     }
 
-    const exporter = new GLTFExporter()
-    exporter
+    new GLTFExporter()
       .parseAsync(object, {
         binary: true,
         onlyVisible: true,
@@ -400,6 +484,10 @@ export function Viewport({
       })
   }, [exportRequest])
 
+  const targetLabel = target.kind === 'mesh'
+    ? `TARGET · ${target.mesh.name}`
+    : 'TARGET · WHOLE ARTIFACT'
+
   return (
     <div className="viewport" ref={hostRef}>
       <div className="viewport-badge">
@@ -409,11 +497,12 @@ export function Viewport({
       <div className="viewport-tool-badge">
         {selected ? `SELECTED · ${transformMode.toUpperCase()}` : 'CLICK MODEL TO SELECT'}
       </div>
+      <div className="viewport-target-badge">{targetLabel}</div>
       {loadState === 'loading' && <div className="viewport-state">LOADING GLB…</div>}
       {loadState === 'error' && (
         <div className="viewport-state error">GLB LOAD FAILED</div>
       )}
-      <div className="viewport-help">orbit · select · gizmo edit</div>
+      <div className="viewport-help">orbit · select mesh target · gizmo edit</div>
     </div>
   )
 }
