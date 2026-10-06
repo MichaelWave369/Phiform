@@ -734,3 +734,31 @@ textarea:focus {
   border-color: #5b3439;
   color: #e0a5ac;
 }
+
+
+.backend-unavailable-list {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.backend-unavailable {
+  padding: 9px 10px;
+  border: 1px solid #3b2d32;
+  border-radius: 8px;
+  background: #130e11;
+}
+
+.backend-unavailable strong {
+  display: block;
+  color: #b98b94;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+}
+
+.backend-unavailable p {
+  margin: 5px 0 0;
+  color: #745f65;
+  font-size: 9px;
+  line-height: 1.45;
+}
