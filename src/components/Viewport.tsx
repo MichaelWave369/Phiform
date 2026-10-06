@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import type { ModelArtifact, PrimitiveKind } from '../core/types'
 
 function geometryFor(kind: PrimitiveKind): THREE.BufferGeometry {
@@ -18,6 +19,15 @@ function geometryFor(kind: PrimitiveKind): THREE.BufferGeometry {
   }
 }
 
+function disposeObject(object: THREE.Object3D) {
+  object.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return
+    child.geometry?.dispose()
+    const materials = Array.isArray(child.material) ? child.material : [child.material]
+    materials.forEach((material) => material.dispose())
+  })
+}
+
 interface ViewportProps {
   artifact: ModelArtifact
 }
@@ -25,7 +35,8 @@ interface ViewportProps {
 export function Viewport({ artifact }: ViewportProps) {
   const hostRef = useRef<HTMLDivElement>(null)
   const sceneRef = useRef<THREE.Scene | null>(null)
-  const meshRef = useRef<THREE.Mesh | null>(null)
+  const objectRef = useRef<THREE.Object3D | null>(null)
+  const [loadState, setLoadState] = useState<'ready' | 'loading' | 'error'>('ready')
 
   useEffect(() => {
     const host = hostRef.current
@@ -86,11 +97,11 @@ export function Viewport({ artifact }: ViewportProps) {
     let frame = 0
     const animate = () => {
       frame = requestAnimationFrame(animate)
-      const mesh = meshRef.current
-      if (mesh) {
-        mesh.rotation.y += 0.0035
-        mesh.rotation.x += (pointerY * 0.28 - mesh.rotation.x) * 0.035
-        mesh.rotation.z += (-pointerX * 0.2 - mesh.rotation.z) * 0.035
+      const object = objectRef.current
+      if (object) {
+        object.rotation.y += 0.0035
+        object.rotation.x += (pointerY * 0.28 - object.rotation.x) * 0.035
+        object.rotation.z += (-pointerX * 0.2 - object.rotation.z) * 0.035
       }
       renderer.render(scene, camera)
     }
@@ -100,13 +111,11 @@ export function Viewport({ artifact }: ViewportProps) {
       cancelAnimationFrame(frame)
       observer.disconnect()
       host.removeEventListener('pointermove', onPointerMove)
-      meshRef.current?.geometry.dispose()
-      const material = meshRef.current?.material
-      if (material instanceof THREE.Material) material.dispose()
+      if (objectRef.current) disposeObject(objectRef.current)
       renderer.dispose()
       renderer.domElement.remove()
       sceneRef.current = null
-      meshRef.current = null
+      objectRef.current = null
     }
   }, [])
 
@@ -114,33 +123,81 @@ export function Viewport({ artifact }: ViewportProps) {
     const scene = sceneRef.current
     if (!scene) return
 
-    if (meshRef.current) {
-      scene.remove(meshRef.current)
-      meshRef.current.geometry.dispose()
-      const oldMaterial = meshRef.current.material
-      if (oldMaterial instanceof THREE.Material) oldMaterial.dispose()
+    let cancelled = false
+
+    if (objectRef.current) {
+      scene.remove(objectRef.current)
+      disposeObject(objectRef.current)
+      objectRef.current = null
     }
 
-    const material = new THREE.MeshStandardMaterial({
-      color: 0xb8efff,
-      metalness: artifact.material.metalness,
-      roughness: artifact.material.roughness,
-    })
+    if (artifact.kind === 'primitive') {
+      const material = new THREE.MeshStandardMaterial({
+        color: 0xb8efff,
+        metalness: artifact.material.metalness,
+        roughness: artifact.material.roughness,
+      })
 
-    const mesh = new THREE.Mesh(geometryFor(artifact.primitive), material)
-    mesh.scale.set(...artifact.scale)
-    mesh.castShadow = true
-    mesh.receiveShadow = true
-    scene.add(mesh)
-    meshRef.current = mesh
+      const mesh = new THREE.Mesh(geometryFor(artifact.primitive), material)
+      mesh.scale.set(...artifact.scale)
+      mesh.castShadow = true
+      mesh.receiveShadow = true
+      scene.add(mesh)
+      objectRef.current = mesh
+      setLoadState('ready')
+      return
+    }
+
+    setLoadState('loading')
+    const loader = new GLTFLoader()
+    loader.load(
+      artifact.url,
+      (gltf) => {
+        if (cancelled) {
+          disposeObject(gltf.scene)
+          return
+        }
+
+        const wrapper = new THREE.Group()
+        const model = gltf.scene
+        const box = new THREE.Box3().setFromObject(model)
+        const size = new THREE.Vector3()
+        const center = new THREE.Vector3()
+        box.getSize(size)
+        box.getCenter(center)
+
+        model.position.set(-center.x, -center.y, -center.z)
+        wrapper.add(model)
+
+        const largest = Math.max(size.x, size.y, size.z, 0.0001)
+        wrapper.scale.setScalar(2.2 / largest)
+        wrapper.position.y = -0.15
+
+        scene.add(wrapper)
+        objectRef.current = wrapper
+        setLoadState('ready')
+      },
+      undefined,
+      () => {
+        if (!cancelled) setLoadState('error')
+      },
+    )
+
+    return () => {
+      cancelled = true
+    }
   }, [artifact])
 
   return (
     <div className="viewport" ref={hostRef}>
       <div className="viewport-badge">
         <span className="status-dot" />
-        LIVE GEOMETRY
+        {artifact.kind === 'glb' ? 'GLB ARTIFACT' : 'LIVE GEOMETRY'}
       </div>
+      {loadState === 'loading' && <div className="viewport-state">LOADING GLB…</div>}
+      {loadState === 'error' && (
+        <div className="viewport-state error">GLB LOAD FAILED · CHECK BRIDGE / CORS</div>
+      )}
       <div className="viewport-help">move pointer to inspect · auto orbit</div>
     </div>
   )

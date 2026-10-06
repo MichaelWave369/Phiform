@@ -1,13 +1,17 @@
 # Adapter Contract
 
-An adapter is deliberately small.
+An adapter remains deliberately small.
 
 ```ts
 interface Neural3DAdapter {
   readonly id: string
   readonly label: string
   readonly capabilities: AdapterCapabilities
-  generate(request: GenerationRequest): Promise<GenerationResult>
+
+  generate(
+    request: GenerationRequest,
+    runtime?: GenerationRuntimeInputs,
+  ): Promise<GenerationResult>
 }
 ```
 
@@ -19,16 +23,24 @@ interface Neural3DAdapter {
 4. Adapters do not directly mutate unrelated workspace state.
 5. Backend/model identity belongs in receipts.
 6. Third-party model licensing stays explicit.
-7. Failure receipts will be added before production inference is enabled.
+7. Binary runtime inputs stay separate from durable receipt metadata.
+8. Bridge-backed GLB artifacts should carry a SHA-256 when the backend can provide one.
 
-## Rung 1 proof adapter
+## Procedural proof adapter
 
-`proof.procedural.v1` is intentionally not neural. It deterministically selects and parameterizes a Three.js primitive from the request. Its purpose is to qualify:
+`proof.procedural.v1` deterministically selects and parameterizes a Three.js primitive. It exists to qualify request, workspace, and receipt behavior.
 
-- request flow
-- artifact replacement
-- UI state
-- receipt emission
-- adapter swapping
+It is explicitly not neural inference.
 
-A real model adapter should be able to replace it without changing those concepts.
+## Local bridge adapter
+
+`LocalBridgeAdapter`:
+
+1. validates the selected backend's declared capability,
+2. sends a job to the configured local bridge,
+3. polls the job,
+4. requires a GLB result,
+5. converts that result into an editor-owned `ModelArtifact`,
+6. binds job/backend/hash data into the receipt.
+
+The adapter does not contain model-specific inference code.

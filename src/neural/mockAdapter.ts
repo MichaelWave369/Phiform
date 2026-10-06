@@ -54,6 +54,7 @@ export const mockAdapter: Neural3DAdapter = {
 
     return {
       artifact: {
+        kind: 'primitive',
         id: artifactId,
         label: request.prompt.trim() || 'Untitled form',
         primitive,
@@ -79,6 +80,7 @@ export const mockAdapter: Neural3DAdapter = {
         outputArtifactId: artifactId,
         seed,
         status: 'success',
+        output: { format: 'procedural' },
         notes: [
           'Rung 1 proof adapter: procedural geometry only.',
           'No neural inference was performed for this receipt.',

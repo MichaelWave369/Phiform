@@ -1,10 +1,12 @@
 {
   "name": "phiform",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "bridge": "node bridge/dev-server.mjs",
+    "contract": "node scripts/bridge-contract-check.mjs",
     "build": "tsc --noEmit && vite build",
     "check": "tsc --noEmit --pretty false",
     "preview": "vite preview"

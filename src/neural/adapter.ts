@@ -1,4 +1,8 @@
-import type { GenerationRequest, GenerationResult } from '../core/types'
+import type {
+  GenerationRequest,
+  GenerationResult,
+  GenerationRuntimeInputs,
+} from '../core/types'
 
 export interface AdapterCapabilities {
   textTo3D: boolean
@@ -12,5 +16,8 @@ export interface Neural3DAdapter {
   readonly id: string
   readonly label: string
   readonly capabilities: AdapterCapabilities
-  generate(request: GenerationRequest): Promise<GenerationResult>
+  generate(
+    request: GenerationRequest,
+    runtime?: GenerationRuntimeInputs,
+  ): Promise<GenerationResult>
 }

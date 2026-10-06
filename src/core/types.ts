@@ -11,29 +11,55 @@ export interface GenerationRequest {
   image?: ImageSource
 }
 
-export interface ModelArtifact {
+export interface GenerationRuntimeInputs {
+  imageFile?: File
+}
+
+interface BaseArtifact {
   id: string
   label: string
-  primitive: PrimitiveKind
   seed: number
+  createdAt: string
+}
+
+export interface PrimitiveModelArtifact extends BaseArtifact {
+  kind: 'primitive'
+  primitive: PrimitiveKind
   scale: [number, number, number]
   material: {
     metalness: number
     roughness: number
   }
-  createdAt: string
 }
+
+export interface GlbModelArtifact extends BaseArtifact {
+  kind: 'glb'
+  format: 'glb'
+  url: string
+  backendId: string
+  sha256?: string
+  byteLength?: number
+}
+
+export type ModelArtifact = PrimitiveModelArtifact | GlbModelArtifact
 
 export interface GenerationReceipt {
   schema: 'phiform.receipt.v1'
   id: string
   adapterId: string
   adapterLabel: string
+  backendId?: string
+  jobId?: string
   createdAt: string
   request: GenerationRequest
   outputArtifactId: string
   seed: number
   status: 'success'
+  output?: {
+    format: 'procedural' | 'glb'
+    sha256?: string
+    byteLength?: number
+  }
   notes: string[]
 }
 
