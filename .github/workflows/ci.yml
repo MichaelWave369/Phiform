@@ -26,6 +26,9 @@ jobs:
       - name: Bridge + SF3D adapter contract
         run: npm run contract
 
+      - name: Edit graph contract
+        run: npm run graph:contract
+
       - name: Typecheck
         run: npm run check
 
