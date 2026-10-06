@@ -1,8 +1,8 @@
 # Local Bridge Protocol v1
 
-The PhiForm local bridge is a deliberately narrow localhost contract between the browser studio and model-specific inference runtimes.
+The PhiForm local bridge is a narrow localhost contract between the browser studio and model-specific inference runtimes.
 
-Default development endpoint:
+Default endpoint:
 
 ```text
 http://127.0.0.1:8787
@@ -12,34 +12,40 @@ http://127.0.0.1:8787
 
 `GET /v1/health`
 
-```json
-{
-  "schema": "phiform.bridge.health.v1",
-  "status": "ok",
-  "bridgeVersion": "0.2.0"
-}
-```
+Rung 3 reports bridge version `0.3.0`.
 
 ## Backend discovery
 
 `GET /v1/backends`
 
-Every backend must explicitly report whether it is a `proof` or `neural` backend and declare capabilities.
+Backends report:
 
-A backend that merely accepts image bytes but does not interpret them must **not** claim `imageTo3D: true`.
+- stable ID and label
+- `proof` or `neural` classification
+- availability
+- optional unavailability reason
+- model identity
+- source URL
+- license label
+- text/image/multi-view/GLB capabilities
+
+An installed model may be listed with `available: false`. This is deliberate: the UI should expose missing prerequisites instead of pretending the backend does not exist.
+
+Current IDs:
+
+- `dev.glb-proof.v1`
+- `stability.sf3d.v1`
 
 ## Submit job
 
 `POST /v1/jobs`
 
-Current Rung 2 request body:
-
 ```json
 {
-  "backendId": "some.backend.v1",
-  "prompt": "weathered ceramic robot",
+  "backendId": "stability.sf3d.v1",
+  "prompt": "optional PhiForm metadata",
   "image": {
-    "name": "robot.png",
+    "name": "object.png",
     "type": "image/png",
     "size": 12345,
     "dataBase64": "..."
@@ -47,62 +53,62 @@ Current Rung 2 request body:
 }
 ```
 
-The image member is optional and should only be sent to a backend that declares image-to-3D support.
+The SF3D backend requires one image. It declares `textTo3D: false`, so a prompt alone is rejected.
 
-Rung 2 uses base64 JSON for simplicity and qualification. A later bridge revision may add multipart/blob transport for very large inputs without changing the editor's adapter semantics.
-
-## Poll job
+## Job lifecycle
 
 `GET /v1/jobs/:id`
 
-Status values:
+```text
+queued -> running -> succeeded
+                   -> failed
+```
 
-- `queued`
-- `running`
-- `succeeded`
-- `failed`
+Failed jobs return an error string. Successful jobs expose a GLB artifact descriptor.
 
-Successful jobs expose:
+## Seed semantics
+
+Bridge jobs currently expose a numeric `seed` field for compatibility with Rung 1 receipts plus a `seedKind`.
+
+For SF3D:
 
 ```json
 {
-  "artifact": {
-    "url": "/artifacts/<job>.glb",
-    "format": "glb",
-    "mimeType": "model/gltf-binary",
-    "sha256": "<64 hex chars>",
-    "byteLength": 123456
-  }
+  "seedKind": "request-fingerprint"
 }
 ```
 
+The value is a deterministic request trace fingerprint. It is **not** claimed to be the model's random seed.
+
 ## Artifact requirements
 
-Rung 2 requires GLB output for bridge-backed generation.
+Bridge-backed outputs must:
 
-Recommended backend behavior:
+- be GLB 2.0
+- have a valid GLB header length
+- be served with `model/gltf-binary`
+- include byte length
+- include SHA-256 over the exact served bytes
 
-- produce GLB 2.0
-- expose CORS to the PhiForm origin
-- return SHA-256 over the exact served bytes
-- report byte length
-- avoid mutating existing workspace files
-- surface model/version/license identity through backend discovery
+## Stable Fast 3D
 
-## Included development backend
+The bridge does not import or redistribute SF3D.
 
-`dev.glb-proof.v1` creates a small procedural GLB cube.
+When `PHIFORM_SF3D_DIR` points to an installed checkout, `stability.sf3d.v1` becomes available. The backend:
 
-It exists only to prove:
+1. decodes the browser-provided image into a temporary job directory,
+2. invokes the checkout's official `run.py`,
+3. waits for process completion,
+4. reads `output/0/mesh.glb`,
+5. validates GLB framing,
+6. loads the GLB into bridge-owned memory,
+7. removes the temporary job directory,
+8. publishes the GLB through the standard artifact endpoint.
 
-```text
-discover -> submit -> poll -> GLB -> SHA-256 -> viewport -> receipt
-```
+See [SF3D.md](SF3D.md).
 
-It declares `kind: proof` and `imageTo3D: false`. No neural inference is performed.
+## Qualification boundary
 
-## Adding a real neural backend
+CI always qualifies the proof backend.
 
-The next backend should implement the same bridge contract and can internally invoke Python, CUDA, model weights, worker queues, or another local process.
-
-That keeps PhiForm's browser code independent from the inference framework.
+For SF3D integration, CI supplies a small external CLI fixture that reproduces the output contract only. This proves process orchestration and artifact handling. It does **not** claim neural inference, model installation, CUDA availability, Hugging Face authorization, or visual quality.

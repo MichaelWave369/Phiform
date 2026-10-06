@@ -23,7 +23,7 @@ jobs:
       - name: Install
         run: npm install
 
-      - name: Bridge contract
+      - name: Bridge + SF3D adapter contract
         run: npm run contract
 
       - name: Typecheck

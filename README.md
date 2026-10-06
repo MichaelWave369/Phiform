@@ -6,23 +6,39 @@
 
 PhiForm accepts model intent through text, images, sketches, depth, multi-view captures, and existing meshes, then routes that intent through swappable generation backends without welding the editor to one model.
 
-## Current state — v0.2 / Rung 2
+## Current state — v0.3 / Rung 3
 
-Rung 1 established the studio shell, Three.js viewport, adapter contract, procedural proof path, and generation receipts.
+PhiForm now has its first real neural backend integration.
 
-Rung 2 adds the first real **artifact transport path**:
+### Rung 1 — workbench foundation ✅
+- React + TypeScript studio
+- Three.js viewport
+- adapter contract
+- procedural proof generation
+- receipts and provenance surfaces
 
-- localhost bridge discovery and health check
-- backend registry with explicit capability declarations
-- asynchronous generation jobs
-- browser image-byte transport for backends that declare image-to-3D support
-- GLB result ingestion through Three.js `GLTFLoader`
-- viewport normalization for returned meshes
-- backend/job/SHA-256 binding in generation receipts
-- bundled procedural GLB proof backend
-- end-to-end bridge contract qualification in CI
+### Rung 2 — local inference bridge ✅
+- localhost bridge discovery
+- capability-declared backends
+- queued generation jobs
+- GLB ingestion
+- SHA-256-bound output receipts
+- end-to-end bridge CI
 
-The bundled development backend is intentionally **not a neural model**. It returns a real GLB and cryptographic hash so the bridge protocol can be qualified without pretending procedural geometry is AI inference.
+### Rung 3 — Stable Fast 3D neural backend ✅
+- optional discovery of an operator-installed Stable Fast 3D checkout
+- real single-image neural reconstruction path through upstream `run.py`
+- no bundled weights and no license laundering into PhiForm's MIT codebase
+- explicit unavailable/backend setup state in the UI
+- image byte handoff to the local model process
+- capture of upstream `output/0/mesh.glb`
+- GLB framing validation before publication
+- model/source/license metadata bound into receipts
+- request fingerprints explicitly distinguished from inference RNG seeds
+- Windows bridge launcher and environment checker
+- CI qualification of the external-runner contract without pretending the model itself ran
+
+See [docs/SF3D.md](docs/SF3D.md) for installation and local qualification.
 
 ## Run the studio
 
@@ -31,12 +47,20 @@ npm install
 npm run dev
 ```
 
-## Run the local bridge
+## Run the bridge
 
-In another terminal:
+Proof-only bridge:
 
 ```bash
 npm run bridge
+```
+
+With Stable Fast 3D configured:
+
+```powershell
+.\scripts\start-sf3d-bridge.ps1 `
+  -Sf3dDir "C:\path\to\stable-fast-3d" `
+  -Python "C:\path\to\python.exe"
 ```
 
 The default bridge endpoint is:
@@ -44,10 +68,6 @@ The default bridge endpoint is:
 ```text
 http://127.0.0.1:8787
 ```
-
-Open PhiForm, switch **Inference Path** to **Local Bridge**, then choose **Connect / Refresh**.
-
-The included backend, `dev.glb-proof.v1`, supports text input and GLB output. It deliberately reports `imageTo3D: false` because it does not interpret image pixels.
 
 ## Qualification
 
@@ -57,50 +77,57 @@ npm run check
 npm run build
 ```
 
-The contract test boots the bridge, discovers its backend, submits a job, polls to completion, downloads the GLB, verifies the GLB header/version/length, and checks that the served bytes match the advertised SHA-256.
+Optional local SF3D environment check:
+
+```bash
+npm run sf3d:check
+```
 
 ## Architecture
 
 ```text
-Text / Image / Sketch / Mesh
-            |
-            v
-      Input Envelope
-            |
-            v
-    Neural3DAdapter
-      |          |
-      |          +-------------------+
-      v                              v
-Proof Adapter                 Local Bridge Adapter
-                                     |
-                                     v
-                           GET /v1/backends
-                           POST /v1/jobs
-                           GET /v1/jobs/:id
-                                     |
-                                     v
-                            backend-owned inference
-                                     |
-                                     v
-                              result.glb + SHA-256
-                                     |
-                    +----------------+----------------+
-                    v                                 v
-              3D Viewport                       Receipt Ledger
+Image
+  |
+  v
+PhiForm web studio
+  |
+  v
+LocalBridgeAdapter
+  |
+  v
+PhiForm bridge
+  |
+  +---------------------------+
+  |                           |
+  v                           v
+proof.glb              stability.sf3d.v1
+                            |
+                            v
+                   operator-installed run.py
+                            |
+                            v
+                     output/0/mesh.glb
+                            |
+                            v
+                  validate + SHA-256
+                            |
+             +--------------+--------------+
+             v                             v
+        3D viewport                  receipt ledger
 ```
 
-See:
+Documentation:
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Adapter contract](docs/ADAPTERS.md)
 - [Local bridge protocol](docs/BRIDGE.md)
+- [Stable Fast 3D backend](docs/SF3D.md)
 
 ## Planned rungs
 
-1. **Workbench foundation**: viewport, adapter contract, receipts, qualification shell. ✅
-2. **Local inference bridge**: backend discovery, jobs, GLB ingestion, hash-bound receipts. ✅
-3. **First neural backend**: connect a real local image-to-3D model behind the qualified bridge.
+1. **Workbench foundation** ✅
+2. **Local inference bridge** ✅
+3. **First neural backend / SF3D** ✅
 4. **Editable geometry**: selection, transform gizmos, materials, mesh inspection, save/load.
 5. **Neural edit graph**: non-destructive branches, masks, localized edits, version lineage.
 6. **Agent interface**: deterministic commands and capability-scoped modeling operations.
@@ -108,4 +135,6 @@ See:
 
 ## License
 
-PhiForm code is MIT licensed. Model weights, neural backends, and their dependencies may carry separate licenses. A bridge backend must report its own model/license metadata; attaching it to PhiForm does not relicense it.
+PhiForm code is MIT licensed.
+
+Third-party model code, weights, dependencies, model outputs, and services may be governed by separate terms. In particular, Stable Fast 3D is not relicensed by PhiForm. Operators must review and comply with Stability AI's current license and model-access terms.

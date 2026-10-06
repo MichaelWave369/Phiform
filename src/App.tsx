@@ -45,6 +45,8 @@ export function App() {
     [latestReceipt],
   )
   const selectedBackend = backends.find((backend) => backend.id === backendId)
+  const availableBackends = backends.filter((backend) => backend.available)
+  const unavailableBackends = backends.filter((backend) => !backend.available)
 
   const connectBridge = async () => {
     setBridgeStatus('checking')
@@ -52,12 +54,15 @@ export function App() {
     try {
       const client = new LocalBridgeClient(endpoint)
       await client.health()
-      const available = (await client.backends()).filter((backend) => backend.available)
-      setBackends(available)
+      const discovered = await client.backends()
+      const available = discovered.filter((backend) => backend.available)
+      setBackends(discovered)
       setBackendId((current) =>
         available.some((backend) => backend.id === current)
           ? current
-          : available[0]?.id ?? '',
+          : available.find((backend) => backend.kind === 'neural')?.id
+            ?? available[0]?.id
+            ?? '',
       )
       setBridgeStatus('online')
     } catch (cause) {
@@ -127,7 +132,7 @@ export function App() {
         </div>
 
         <div className="top-status">
-          <span className="pill"><i /> RUNG 2</span>
+          <span className="pill"><i /> RUNG 3</span>
           <span className="pill muted">AUTHORITY: WORKSPACE</span>
         </div>
       </header>
@@ -219,7 +224,7 @@ export function App() {
                   {bridgeStatus.toUpperCase()}
                 </div>
 
-                {backends.length > 0 && (
+                {availableBackends.length > 0 && (
                   <>
                     <label className="field-label" htmlFor="backend">BACKEND</label>
                     <select
@@ -227,19 +232,38 @@ export function App() {
                       value={backendId}
                       onChange={(event) => setBackendId(event.target.value)}
                     >
-                      {backends.map((backend) => (
+                      {availableBackends.map((backend) => (
                         <option key={backend.id} value={backend.id}>
                           {backend.label} · {backend.kind}
                         </option>
                       ))}
                     </select>
                     {selectedBackend && (
-                      <p>
-                        {selectedBackend.model ?? selectedBackend.id}
-                        {selectedBackend.license ? ` · ${selectedBackend.license}` : ''}
-                      </p>
+                      <>
+                        <p>
+                          {selectedBackend.model ?? selectedBackend.id}
+                          {selectedBackend.license ? ` · ${selectedBackend.license}` : ''}
+                        </p>
+                        <div className="capabilities">
+                          <span className={selectedBackend.capabilities.textTo3D ? '' : 'off'}>TEXT</span>
+                          <span className={selectedBackend.capabilities.imageTo3D ? '' : 'off'}>IMAGE</span>
+                          <span className={selectedBackend.capabilities.multiView ? '' : 'off'}>MULTI-VIEW</span>
+                          <span className={selectedBackend.capabilities.glbOutput ? '' : 'off'}>GLB</span>
+                        </div>
+                      </>
                     )}
                   </>
+                )}
+
+                {unavailableBackends.length > 0 && (
+                  <div className="backend-unavailable-list">
+                    {unavailableBackends.map((backend) => (
+                      <div className="backend-unavailable" key={backend.id}>
+                        <strong>{backend.label} · OFFLINE</strong>
+                        <p>{backend.statusReason ?? 'Backend unavailable.'}</p>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             )}
@@ -256,7 +280,7 @@ export function App() {
         <section className="stage">
           <div className="stage-meta">
             <span>ARTIFACT / {artifact.id.slice(0, 22)}</span>
-            <span>SEED {artifact.seed}</span>
+            <span>{latestReceipt?.seedKind === 'request-fingerprint' ? 'TRACE' : 'SEED'} {artifact.seed}</span>
           </div>
           <Viewport artifact={artifact} />
           <div className="stage-footer">
@@ -324,6 +348,7 @@ export function App() {
               <div><dt>schema</dt><dd>{latestReceipt?.schema ?? '—'}</dd></div>
               <div><dt>status</dt><dd>{latestReceipt?.status ?? '—'}</dd></div>
               <div><dt>job</dt><dd>{latestReceipt?.jobId ?? '—'}</dd></div>
+              <div><dt>seed kind</dt><dd>{latestReceipt?.seedKind ?? 'inference / local'}</dd></div>
               <div><dt>sha256</dt><dd>{latestReceipt?.output?.sha256 ?? '—'}</dd></div>
               <div><dt>checksum</dt><dd>{checksum}</dd></div>
             </dl>
@@ -338,11 +363,12 @@ export function App() {
           </div>
 
           <div className="roadmap-mini">
-            <span className="eyebrow">RUNG 2 CONTRACT</span>
-            <strong>Bridge → job → GLB → receipt</strong>
+            <span className="eyebrow">RUNG 3 NEURAL PATH</span>
+            <strong>Image → SF3D → textured GLB</strong>
             <p>
-              The bundled development bridge emits a real GLB for qualification but
-              explicitly identifies itself as procedural proof, not neural inference.
+              Stable Fast 3D appears as a neural backend only when the local bridge can
+              see an operator-installed checkout. Missing model setup stays visible
+              instead of being silently downgraded to proof geometry.
             </p>
           </div>
         </aside>
