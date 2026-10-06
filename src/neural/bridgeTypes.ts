@@ -3,7 +3,9 @@ export interface BridgeBackend {
   label: string
   kind: 'proof' | 'neural'
   available: boolean
+  statusReason?: string
   model?: string
+  sourceUrl?: string
   license?: string
   capabilities: {
     textTo3D: boolean
@@ -33,6 +35,7 @@ export interface BridgeJob {
   backendId: string
   status: 'queued' | 'running' | 'succeeded' | 'failed'
   seed: number
+  seedKind?: 'request-fingerprint' | 'inference'
   createdAt: string
   artifact?: BridgeArtifact
   notes?: string[]
