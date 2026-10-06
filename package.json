@@ -1,11 +1,12 @@
 {
   "name": "phiform",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "bridge": "node bridge/dev-server.mjs",
+    "sf3d:check": "node scripts/check-sf3d.mjs",
     "contract": "node scripts/bridge-contract-check.mjs",
     "build": "tsc --noEmit && vite build",
     "check": "tsc --noEmit --pretty false",
