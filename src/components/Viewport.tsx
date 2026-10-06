@@ -140,6 +140,7 @@ export function Viewport({
   const transformRef = useRef<TransformControls | null>(null)
   const helperRef = useRef<THREE.BoxHelper | null>(null)
   const applyingRef = useRef(false)
+  const editsRef = useRef(edits)
   const exportSeenRef = useRef(0)
   const [loadState, setLoadState] = useState<'ready' | 'loading' | 'error'>('ready')
 
@@ -178,12 +179,13 @@ export function Viewport({
       const object = objectRef.current
       if (!object) return
 
+      const current = editsRef.current
       onEditsChange({
-        ...edits,
+        ...current,
         position: [object.position.x, object.position.y, object.position.z],
         rotation: [object.rotation.x, object.rotation.y, object.rotation.z],
         scale: [object.scale.x, object.scale.y, object.scale.z],
-        revision: edits.revision + 1,
+        revision: current.revision + 1,
       })
       onStatsChange(statsFor(object))
     })
@@ -254,6 +256,10 @@ export function Viewport({
       helperRef.current = null
     }
   }, [])
+
+  useEffect(() => {
+    editsRef.current = edits
+  }, [edits])
 
   useEffect(() => {
     const transform = transformRef.current
