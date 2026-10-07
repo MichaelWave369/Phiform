@@ -220,6 +220,18 @@ try {
   }
   assert.equal(verifyReleaseAttestation(tampered), false)
 
+  const misleadingStatement = {
+    ...attestation,
+    statement: {
+      ...attestation.statement,
+      packageSha256: '0'.repeat(64),
+    },
+  }
+  assert.equal(
+    verifyReleaseAttestation(misleadingStatement),
+    false,
+  )
+
   process.stdout.write(
     [
       'PASS release signer discovery',
@@ -232,6 +244,7 @@ try {
       'PASS deterministic signature for identical statement',
       'PASS forged package bytes rejected',
       'PASS tampered signature rejected',
+      'PASS readable statement tampering rejected',
     ].join('\n') + '\n',
   )
 } finally {
