@@ -38,6 +38,9 @@ jobs:
       - name: Engine asset pack contract
         run: npm run engine:contract
 
+      - name: Texture + material contract
+        run: npm run texture:contract
+
       - name: Typecheck
         run: npm run check
 
