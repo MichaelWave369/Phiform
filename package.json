@@ -1,6 +1,6 @@
 {
   "name": "phiform",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,7 +14,8 @@
     "preview": "vite preview",
     "agent:contract": "tsx scripts/agent-command-check.ts",
     "production:contract": "tsx scripts/production-geometry-check.ts",
-    "engine:contract": "tsx scripts/engine-pack-check.ts"
+    "engine:contract": "tsx scripts/engine-pack-check.ts",
+    "texture:contract": "tsx scripts/texture-material-check.ts"
   },
   "dependencies": {
     "react": "^19.1.1",
