@@ -8,6 +8,10 @@ const KTX2_MAGIC = Buffer.from([
   0x20, 0x32, 0x30, 0xbb,
   0x0d, 0x0a, 0x1a, 0x0a,
 ])
+const PNG_MAGIC = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47,
+  0x0d, 0x0a, 0x1a, 0x0a,
+])
 
 export const KTX_ENCODER_ID = 'khronos.ktx.v1'
 export const KTX_CODECS = ['basis-lz', 'uastc-ldr-4x4']
@@ -25,6 +29,12 @@ function prefixArgsFromEnv(env) {
   }
 }
 
+export function isPngBuffer(value) {
+  const buffer = Buffer.from(value)
+  return buffer.length >= PNG_MAGIC.length &&
+    buffer.subarray(0, PNG_MAGIC.length).equals(PNG_MAGIC)
+}
+
 export function isKtx2Buffer(value) {
   const buffer = Buffer.from(value)
   return buffer.length >= KTX2_MAGIC.length &&
@@ -34,7 +44,7 @@ export function isKtx2Buffer(value) {
 export function codecArgs(codec) {
   if (codec === 'basis-lz') {
     return [
-      '--codec', 'basis-lz',
+      '--encode', 'basis-lz',
       '--qlevel', '128',
       '--clevel', '2',
       '--threads', '1',
@@ -43,7 +53,7 @@ export function codecArgs(codec) {
 
   if (codec === 'uastc-ldr-4x4') {
     return [
-      '--codec', 'uastc-ldr-4x4',
+      '--encode', 'uastc-ldr-4x4',
       '--uastc-quality', '2',
       '--uastc-rdo',
       '--uastc-rdo-l', '0.5',
@@ -124,14 +134,17 @@ export function createKtxEncoder(options = {}) {
     }
   }
 
-  async function encode(sourceBytes, codec) {
+  async function encode(sourceBytes, codec, colorSpace = 'linear') {
     if (!KTX_CODECS.includes(codec)) {
       throw new Error(`unsupported KTX codec: ${codec}`)
     }
+    if (colorSpace !== 'srgb' && colorSpace !== 'linear') {
+      throw new Error('texture color space must be srgb or linear')
+    }
 
     const source = Buffer.from(sourceBytes)
-    if (!isKtx2Buffer(source)) {
-      throw new Error('source payload is not a valid KTX2 container signature')
+    if (!isPngBuffer(source)) {
+      throw new Error('source payload is not a valid PNG signature')
     }
 
     const descriptor = probe()
@@ -140,7 +153,7 @@ export function createKtxEncoder(options = {}) {
     }
 
     const workDir = await mkdtemp(join(tmpdir(), 'phiform-ktx-'))
-    const inputPath = join(workDir, 'source.ktx2')
+    const inputPath = join(workDir, 'source.png')
     const outputPath = join(workDir, 'encoded.ktx2')
 
     try {
@@ -150,7 +163,17 @@ export function createKtxEncoder(options = {}) {
         executable,
         [
           ...prefixArgs,
-          'encode',
+          'create',
+          '--format',
+          colorSpace === 'srgb'
+            ? 'R8G8B8A8_SRGB'
+            : 'R8G8B8A8_UNORM',
+          '--assign-tf',
+          colorSpace,
+          '--generate-mipmap',
+          '--mipmap-filter',
+          'lanczos4',
+          '--fail-on-origin-changes',
           ...codecArgs(codec),
           inputPath,
           outputPath,
@@ -166,12 +189,15 @@ export function createKtxEncoder(options = {}) {
       return {
         buffer: output,
         codec,
+        colorSpace,
         version: descriptor.version || 'unknown',
         notes: [
           `Encoded by ${descriptor.label} using ${codec}.`,
           codec === 'basis-lz'
             ? 'ETC1S / BasisLZ encoding uses qlevel=128, clevel=2, threads=1.'
             : 'UASTC LDR 4x4 uses quality=2, RDO lambda=0.5, RDO single-threading, zstd=18, threads=1.',
+          `Source PNG was assigned ${colorSpace} transfer semantics without inventing a color conversion.`,
+          'A full mip pyramid was requested with the Khronos lanczos4 mipmap filter.',
           'Output was validated for the KTX2 identifier before hashing.',
         ],
       }
