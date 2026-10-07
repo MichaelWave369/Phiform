@@ -4,9 +4,9 @@
 
 > Neural systems may propose geometry. The workspace keeps editable state, provenance, and export authority.
 
-## Current state — v0.13 / Rung 13
+## Current state — v0.14 / Rung 14
 
-PhiForm now binds official Khronos glTF validation reports to exact derived GLB hashes and supplements them with PhiForm-specific BasisU semantic checks.
+PhiForm now promotes validated derived GLBs into governed release candidates only when exact bytes, lineage receipts, validation evidence, current workspace identity, and explicit policy all agree.
 
 ### Rung 1 — workbench foundation ✅
 React/TypeScript studio, Three.js viewport, adapter contract, proof generation, receipts.
@@ -142,6 +142,26 @@ Topology/attribute audit, conservative repair, Meshopt-backed LOD generation, pr
 - project v10 persistence of validation receipts
 - Rung 11 and Rung 12 outputs validated against the exact bytes before final status
 
+### Rung 14 — governed release candidate gate ✅
+- release targets: fallback-bearing BasisU GLB or compact required-BasisU GLB
+- explicit `strict-pass` and `allow-warning` policies
+- FAIL is never releasable
+- strict policy accepts PASS only
+- warning policy accepts PASS/WARNING
+- exact in-session GLB bytes required
+- release asset SHA-256 recomputed during packaging
+- derived receipt hash/length must match release bytes
+- validation receipt hash/length must match the same bytes
+- target receipt ID must match validation receipt target
+- artifact ID and edit-graph node must match the current workspace
+- deterministic ZIP with fixed timestamps and stable ordering
+- release package includes asset, derived receipt, validation receipt, manifest, and RELEASE.md
+- external release receipt binds final ZIP SHA-256
+- `phiform.release-candidate.v1`
+- `phiform.release-receipt.v1`
+- project v11 persistence of release receipts
+- CI refusal tests for stale lineage, forged bytes, policy violations, and failed validation
+
 ## Engine pack structure
 
 A typical pack looks like:
@@ -253,6 +273,7 @@ npm run texture:encode:contract
 npm run basisu:contract
 npm run basisu:compact:contract
 npm run gltf:validation:contract
+npm run release:contract
 npm run check
 npm run build
 ```
@@ -262,12 +283,12 @@ npm run build
 New saves use:
 
 ```text
-phiform.project.v10
+phiform.project.v11
 ```
 
-Project v10 preserves generation evidence, workspace state, edit lineage, agent receipts, production receipts, engine-pack receipts, texture qualification receipts, executed KTX2 receipts, BasisU-derived GLB receipts, compact BasisU receipts, glTF validation receipts, and embedded source GLB bytes.
+Project v11 preserves generation evidence, workspace state, edit lineage, agent receipts, production receipts, engine-pack receipts, texture qualification receipts, executed KTX2 receipts, BasisU-derived GLB receipts, compact BasisU receipts, glTF validation receipts, governed release receipts, and embedded source GLB bytes.
 
-Project v1 through v9 remain importable. Migration never invents history for capabilities that did not exist yet.
+Project v1 through v10 remain importable. Migration never invents history for capabilities that did not exist yet.
 
 ## Documentation
 
@@ -285,10 +306,11 @@ Project v1 through v9 remain importable. Migration never invents history for cap
 - [KHR_texture_basisu derived GLB](docs/BASISU_GLB.md)
 - [Compact required-BasisU GLB](docs/BASISU_COMPACTION.md)
 - [glTF validation receipts](docs/GLTF_VALIDATION.md)
+- [Governed release candidates](docs/RELEASE_GATE.md)
 
 ## Next
 
-Likely next production work includes release gating on validation receipts, visual texture error metrics, qualified manifold repair, better collision proxies, semantic retopology, and engine-side validation of compact BasisU imports.
+Likely next production work includes visual texture error metrics, qualified manifold repair, better collision proxies, semantic retopology, signed release attestations, and engine-side validation of compact BasisU imports.
 
 ## License
 
