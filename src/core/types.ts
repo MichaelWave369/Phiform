@@ -176,7 +176,7 @@ export interface PortableProjectV1 {
   glbBase64?: string
 }
 
-export type PortableProject = PortableProjectV8
+export type PortableProject = PortableProjectV9
 
 
 export interface AgentAuditFingerprint {
@@ -577,6 +577,48 @@ export interface PortableProjectV8 {
   textureReceipts: TextureReceipt[]
   textureEncodingReceipts: TextureEncodingReceipt[]
   basisuDerivedReceipts: BasisuDerivedReceipt[]
+  latestReceipt?: GenerationReceipt
+  glbBase64?: string
+}
+
+
+export interface BasisuCompactReceipt {
+  schema: 'phiform.basisu-compact-receipt.v1'
+  id: string
+  createdAt: string
+  sourceArtifactId: string
+  sourceNodeId: string
+  sourceBasisuDerivedReceiptId: string
+  sourceFilename: string
+  outputFilename: string
+  sourceGlbSha256: string
+  sourceGlbByteLength: number
+  outputGlbSha256: string
+  outputGlbByteLength: number
+  extensionUsed: 'KHR_texture_basisu'
+  extensionRequired: true
+  textureCount: number
+  removedFallbackImageCount: number
+  removedBufferViewCount: number
+  removedBinaryBytes: number
+  byteSavings: number
+  byteSavingsRatio: number
+  notes: string[]
+}
+
+export interface PortableProjectV9 {
+  schema: 'phiform.project.v9'
+  savedAt: string
+  artifact: ModelArtifact
+  edits: WorkspaceEditState
+  editGraph: EditGraph
+  agentReceipts: AgentAuditReceipt[]
+  productionReceipts: ProductionReceipt[]
+  enginePackReceipts: EnginePackReceipt[]
+  textureReceipts: TextureReceipt[]
+  textureEncodingReceipts: TextureEncodingReceipt[]
+  basisuDerivedReceipts: BasisuDerivedReceipt[]
+  basisuCompactReceipts: BasisuCompactReceipt[]
   latestReceipt?: GenerationReceipt
   glbBase64?: string
 }
