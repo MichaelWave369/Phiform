@@ -8,6 +8,8 @@ import type {
   PortableProjectV1,
   PortableProjectV2,
   PortableProjectV3,
+  PortableProjectV4,
+  ProductionReceipt,
   WorkspaceEditState,
 } from './types'
 
@@ -15,7 +17,11 @@ const DB_NAME = 'phiform-workspace'
 const STORE_NAME = 'projects'
 const LAST_PROJECT = 'last'
 
-type AnyProject = PortableProjectV1 | PortableProjectV2 | PortableProjectV3
+type AnyProject =
+  | PortableProjectV1
+  | PortableProjectV2
+  | PortableProjectV3
+  | PortableProjectV4
 
 interface StoredProjectRecord {
   key: string
@@ -76,21 +82,38 @@ function base64ToArrayBuffer(value: string): ArrayBuffer {
 
 function manifestArtifact(artifact: ModelArtifact): ModelArtifact {
   if (artifact.kind !== 'glb') return artifact
-  return {
-    ...artifact,
-    url: 'phiform://embedded/model.glb',
-  }
+  return { ...artifact, url: 'phiform://embedded/model.glb' }
 }
 
 function normalizeProject(project: AnyProject): PortableProject {
+  if (project.schema === 'phiform.project.v4') {
+    if (project.editGraph?.schema !== 'phiform.edit-graph.v1') {
+      throw new Error('PhiForm project v4 is missing a valid edit graph.')
+    }
+    if (!Array.isArray(project.agentReceipts)) {
+      throw new Error('PhiForm project v4 is missing its agent audit array.')
+    }
+    if (!Array.isArray(project.productionReceipts)) {
+      throw new Error('PhiForm project v4 is missing its production receipt array.')
+    }
+    return project
+  }
+
   if (project.schema === 'phiform.project.v3') {
     if (project.editGraph?.schema !== 'phiform.edit-graph.v1') {
       throw new Error('PhiForm project v3 is missing a valid edit graph.')
     }
-    if (!Array.isArray(project.agentReceipts)) {
-      throw new Error('PhiForm project v3 is missing its agent audit array.')
+    return {
+      schema: 'phiform.project.v4',
+      savedAt: project.savedAt,
+      artifact: project.artifact,
+      edits: project.edits,
+      editGraph: project.editGraph,
+      agentReceipts: project.agentReceipts,
+      productionReceipts: [],
+      latestReceipt: project.latestReceipt,
+      glbBase64: project.glbBase64,
     }
-    return project
   }
 
   if (project.schema === 'phiform.project.v2') {
@@ -98,37 +121,32 @@ function normalizeProject(project: AnyProject): PortableProject {
       throw new Error('PhiForm project v2 is missing a valid edit graph.')
     }
     return {
-      schema: 'phiform.project.v3',
+      schema: 'phiform.project.v4',
       savedAt: project.savedAt,
       artifact: project.artifact,
       edits: project.edits,
       editGraph: project.editGraph,
       agentReceipts: [],
+      productionReceipts: [],
       latestReceipt: project.latestReceipt,
       glbBase64: project.glbBase64,
     }
   }
 
   return {
-    schema: 'phiform.project.v3',
+    schema: 'phiform.project.v4',
     savedAt: project.savedAt,
     artifact: project.artifact,
     edits: project.edits,
-    editGraph: createEditGraph(
-      project.artifact,
-      project.edits,
-      project.latestReceipt,
-    ),
+    editGraph: createEditGraph(project.artifact, project.edits, project.latestReceipt),
     agentReceipts: [],
+    productionReceipts: [],
     latestReceipt: project.latestReceipt,
     glbBase64: project.glbBase64,
   }
 }
 
-function hydrateProject(
-  input: AnyProject,
-  glb?: ArrayBuffer,
-): PortableProject {
+function hydrateProject(input: AnyProject, glb?: ArrayBuffer): PortableProject {
   const project = normalizeProject(input)
   if (project.artifact.kind !== 'glb') return project
   if (!glb) {
@@ -151,16 +169,18 @@ export async function saveProjectToBrowser(
   edits: WorkspaceEditState,
   editGraph: EditGraph,
   agentReceipts: readonly AgentAuditReceipt[],
+  productionReceipts: readonly ProductionReceipt[],
   latestReceipt?: GenerationReceipt,
 ): Promise<void> {
   const glb = await fetchGlb(artifact)
   const project: PortableProject = {
-    schema: 'phiform.project.v3',
+    schema: 'phiform.project.v4',
     savedAt: new Date().toISOString(),
     artifact: manifestArtifact(artifact),
     edits,
     editGraph,
     agentReceipts: [...agentReceipts],
+    productionReceipts: [...productionReceipts],
     latestReceipt,
   }
 
@@ -169,11 +189,7 @@ export async function saveProjectToBrowser(
     const transaction = db.transaction(STORE_NAME, 'readwrite')
     const store = transaction.objectStore(STORE_NAME)
     await requestResult(
-      store.put({
-        key: LAST_PROJECT,
-        project,
-        glb,
-      } satisfies StoredProjectRecord),
+      store.put({ key: LAST_PROJECT, project, glb } satisfies StoredProjectRecord),
     )
   } finally {
     db.close()
@@ -188,7 +204,6 @@ export async function loadProjectFromBrowser(): Promise<PortableProject> {
     const record = await requestResult(
       store.get(LAST_PROJECT) as IDBRequest<StoredProjectRecord | undefined>,
     )
-
     if (!record) throw new Error('No saved PhiForm project was found in this browser.')
     return hydrateProject(record.project, record.glb)
   } finally {
@@ -201,16 +216,18 @@ export async function createPortableProject(
   edits: WorkspaceEditState,
   editGraph: EditGraph,
   agentReceipts: readonly AgentAuditReceipt[],
+  productionReceipts: readonly ProductionReceipt[],
   latestReceipt?: GenerationReceipt,
 ): Promise<PortableProject> {
   const glb = await fetchGlb(artifact)
   return {
-    schema: 'phiform.project.v3',
+    schema: 'phiform.project.v4',
     savedAt: new Date().toISOString(),
     artifact: manifestArtifact(artifact),
     edits,
     editGraph,
     agentReceipts: [...agentReceipts],
+    productionReceipts: [...productionReceipts],
     latestReceipt,
     glbBase64: glb ? arrayBufferToBase64(glb) : undefined,
   }
@@ -236,11 +253,11 @@ export function downloadPortableProject(project: PortableProject): void {
 
 export async function readPortableProject(file: File): Promise<PortableProject> {
   const parsed = JSON.parse(await file.text()) as Partial<AnyProject>
-
   if (
     (parsed.schema !== 'phiform.project.v1' &&
       parsed.schema !== 'phiform.project.v2' &&
-      parsed.schema !== 'phiform.project.v3') ||
+      parsed.schema !== 'phiform.project.v3' &&
+      parsed.schema !== 'phiform.project.v4') ||
     !parsed.artifact ||
     !parsed.edits
   ) {

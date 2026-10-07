@@ -4,12 +4,20 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { TransformControls } from 'three/addons/controls/TransformControls.js'
+import {
+  auditObject,
+  prepareProductionVariants,
+} from '../production/geometry'
+import { productionProfile } from '../production/profiles'
+import type { ProductionRuntimeResult } from '../production/runtime'
 import type {
   EditTarget,
   MeshStats,
   MeshTarget,
   ModelArtifact,
   PrimitiveKind,
+  ProductionAudit,
+  ProductionProfileId,
   TransformMode,
   WorkspaceEditState,
 } from '../core/types'
@@ -158,12 +166,16 @@ interface ViewportProps {
   selected: boolean
   target: EditTarget
   exportRequest: number
+  productionProfileId: ProductionProfileId
+  productionRequest: number
   onSelectedChange: (selected: boolean) => void
   onTargetChange: (target: EditTarget) => void
   onMeshTargetsChange: (targets: MeshTarget[]) => void
   onEditsChange: (edits: WorkspaceEditState) => void
   onStatsChange: (stats: MeshStats) => void
+  onProductionAuditChange: (audit: ProductionAudit) => void
   onExportComplete: (blob: Blob) => void
+  onProductionComplete: (result: ProductionRuntimeResult) => void
   onError: (message: string) => void
 }
 
@@ -174,12 +186,16 @@ export function Viewport({
   selected,
   target,
   exportRequest,
+  productionProfileId,
+  productionRequest,
   onSelectedChange,
   onTargetChange,
   onMeshTargetsChange,
   onEditsChange,
   onStatsChange,
+  onProductionAuditChange,
   onExportComplete,
+  onProductionComplete,
   onError,
 }: ViewportProps) {
   const hostRef = useRef<HTMLDivElement>(null)
@@ -191,6 +207,7 @@ export function Viewport({
   const applyingRef = useRef(false)
   const editsRef = useRef(edits)
   const exportSeenRef = useRef(0)
+  const productionSeenRef = useRef(0)
   const [loadState, setLoadState] = useState<'ready' | 'loading' | 'error'>('ready')
 
   useEffect(() => {
@@ -383,6 +400,9 @@ export function Viewport({
     object.scale.set(...edits.scale)
     applyMaterialOverride(object, edits)
     onStatsChange(statsFor(object))
+    onProductionAuditChange(
+      auditObject(object, productionProfile(productionProfileId).requireUvs),
+    )
     applyingRef.current = false
   }, [edits])
 
@@ -407,6 +427,9 @@ export function Viewport({
       scene.add(object)
       objectRef.current = object
       onStatsChange(statsFor(object))
+      onProductionAuditChange(
+        auditObject(object, productionProfile(productionProfileId).requireUvs),
+      )
       setLoadState('ready')
       onSelectedChange(true)
 
@@ -462,6 +485,74 @@ export function Viewport({
       cancelled = true
     }
   }, [artifact])
+
+  useEffect(() => {
+    const object = objectRef.current
+    if (!object) return
+    onProductionAuditChange(
+      auditObject(object, productionProfile(productionProfileId).requireUvs),
+    )
+  }, [productionProfileId])
+
+  useEffect(() => {
+    if (
+      productionRequest <= 0 ||
+      productionRequest === productionSeenRef.current
+    ) {
+      return
+    }
+    productionSeenRef.current = productionRequest
+
+    const object = objectRef.current
+    if (!object) {
+      onError('Nothing is loaded for production export.')
+      return
+    }
+
+    const profile = productionProfile(productionProfileId)
+    const exporter = new GLTFExporter()
+
+    prepareProductionVariants(object, profile)
+      .then(async (prepared) => {
+        const files: ProductionRuntimeResult['files'] = []
+
+        for (const variant of prepared.variants) {
+          try {
+            const result = await exporter.parseAsync(variant.object, {
+              binary: true,
+              onlyVisible: true,
+              trs: true,
+            })
+            if (!(result instanceof ArrayBuffer)) {
+              throw new Error('Production exporter returned JSON instead of binary GLB.')
+            }
+            files.push({
+              lod: variant.lod,
+              ratio: variant.ratio,
+              audit: variant.audit,
+              operations: variant.operations,
+              blob: new Blob([result], { type: 'model/gltf-binary' }),
+            })
+          } finally {
+            disposeObject(variant.object)
+          }
+        }
+
+        onProductionComplete({
+          profileId: productionProfileId,
+          before: prepared.before,
+          operations: prepared.operations,
+          files,
+        })
+      })
+      .catch((cause) => {
+        onError(
+          cause instanceof Error
+            ? cause.message
+            : 'Production export failed.',
+        )
+      })
+  }, [productionRequest])
 
   useEffect(() => {
     if (exportRequest <= 0 || exportRequest === exportSeenRef.current) return

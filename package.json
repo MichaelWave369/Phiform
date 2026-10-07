@@ -1,6 +1,6 @@
 {
   "name": "phiform",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,7 +12,8 @@
     "build": "tsc --noEmit && vite build",
     "check": "tsc --noEmit --pretty false",
     "preview": "vite preview",
-    "agent:contract": "tsx scripts/agent-command-check.ts"
+    "agent:contract": "tsx scripts/agent-command-check.ts",
+    "production:contract": "tsx scripts/production-geometry-check.ts"
   },
   "dependencies": {
     "react": "^19.1.1",
