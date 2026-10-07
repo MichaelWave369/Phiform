@@ -1,6 +1,6 @@
 {
   "name": "phiform",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -16,7 +16,8 @@
     "production:contract": "tsx scripts/production-geometry-check.ts",
     "engine:contract": "tsx scripts/engine-pack-check.ts",
     "texture:contract": "tsx scripts/texture-material-check.ts",
-    "texture:encode:contract": "node scripts/texture-encoder-check.mjs"
+    "texture:encode:contract": "node scripts/texture-encoder-check.mjs",
+    "basisu:contract": "tsx scripts/basisu-glb-check.ts"
   },
   "dependencies": {
     "react": "^19.1.1",
