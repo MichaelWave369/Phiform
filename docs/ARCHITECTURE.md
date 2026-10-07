@@ -478,3 +478,39 @@ external phiform.release-receipt.v1
 ```
 
 A release receipt does not mutate the workspace and does not promote the release ZIP to source authority. It is downstream evidence that one exact derived artifact satisfied one explicit release policy at one point in project lineage.
+
+
+## Rung 15 — cryptographic attestation boundary
+
+Signing is downstream of governed release packaging.
+
+```text
+governed release ZIP bytes
+      |
+      +-- release receipt
+      +-- session bearer token
+      |
+      v
+localhost Ed25519 signer
+      |
+      +-- private key stays local
+      +-- recompute ZIP hash/length
+      +-- compare release receipt
+      |
+      v
+canonical release statement
+      |
+      v
+Ed25519 signature
+      |
+      +-- local verify
+      +-- public key
+      +-- SPKI SHA-256 fingerprint
+      |
+      v
+phiform.release-attestation.v1
+```
+
+The browser persists only public attestation evidence. The signing token is session-only and the private key never crosses the bridge boundary.
+
+Signature validity and signer trust are intentionally separate concepts. Rung 15 proves possession of the private key corresponding to the included public key; later policy may decide which key fingerprints are trusted.
