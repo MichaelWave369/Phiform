@@ -4,9 +4,9 @@
 
 > Neural systems may propose geometry. The workspace keeps editable state, provenance, and export authority.
 
-## Current state — v0.8 / Rung 8
+## Current state — v0.9 / Rung 9
 
-PhiForm now packages qualified production geometry into governed Godot- and Unreal-oriented asset bundles.
+PhiForm now qualifies the texture/material side of those assets too: PBR roles, color-space expectations, dimension budgets, packed maps, and estimated GPU memory.
 
 ### Rung 1 — workbench foundation ✅
 React/TypeScript studio, Three.js viewport, adapter contract, proof generation, receipts.
@@ -47,6 +47,25 @@ Topology/attribute audit, conservative repair, Meshopt-backed LOD generation, pr
 - deterministic package file ordering and fixed ZIP timestamps
 - project v5 persistence of engine-pack receipts
 - CI qualification for collision naming, package structure, embedded manifest, and deterministic ZIP output
+
+### Rung 9 — texture + material qualification ✅
+- archive, web, and game texture policies
+- unique texture inventory across materials
+- PBR role detection for base color, emissive, normal, metallic, roughness, AO, alpha, bump, displacement, and light maps
+- sRGB vs linear-data expectation checks
+- impossible mixed-role color-space reuse detection
+- width / height / maximum-dimension checks
+- estimated decoded RGBA8 + mipmap GPU memory
+- oversized-texture warnings
+- material-without-texture observation
+- packed metallic/roughness/AO reuse recognition
+- KTX2/Basis Universal compression planning
+- UASTC recommendation for normal/height detail
+- ETC1S recommendation for color/scalar maps
+- explicit `planned-not-executed` compression status
+- `phiform.texture-receipt.v1`
+- project v6 persistence of texture receipts
+- CI qualification for deduplication, ORM packing, policy warnings, color-space conflicts, and compression-plan semantics
 
 ## Engine pack structure
 
@@ -154,6 +173,7 @@ npm run graph:contract
 npm run agent:contract
 npm run production:contract
 npm run engine:contract
+npm run texture:contract
 npm run check
 npm run build
 ```
@@ -163,12 +183,12 @@ npm run build
 New saves use:
 
 ```text
-phiform.project.v5
+phiform.project.v6
 ```
 
-Project v5 preserves generation evidence, workspace state, edit lineage, agent receipts, production receipts, engine-pack receipts, and embedded source GLB bytes.
+Project v6 preserves generation evidence, workspace state, edit lineage, agent receipts, production receipts, engine-pack receipts, texture receipts, and embedded source GLB bytes.
 
-Project v1 through v4 remain importable. Migration never invents history for capabilities that did not exist yet.
+Project v1 through v5 remain importable. Migration never invents history for capabilities that did not exist yet.
 
 ## Documentation
 
@@ -181,10 +201,11 @@ Project v1 through v4 remain importable. Migration never invents history for cap
 - [Agent command API](docs/AGENT_API.md)
 - [Production geometry](docs/PRODUCTION.md)
 - [Engine asset packs](docs/ENGINE_PACKS.md)
+- [Texture + material qualification](docs/TEXTURES.md)
 
 ## Next
 
-Likely next production rungs are texture qualification/compression, qualified manifold repair, better collision proxies, and semantic retopology.
+Likely next production rungs are actual KTX2/Basis encoding, qualified manifold repair, better collision proxies, and semantic retopology.
 
 ## License
 
