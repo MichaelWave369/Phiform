@@ -164,3 +164,42 @@ agent receipt
 The browser publishes the same boundary at `window.PhiFormAgent` that the built-in Agent Command Rail uses.
 
 An agent does not receive generic application authority by being able to call the API. Each verb maps to one declared capability, and capability grants are operator-controlled.
+
+
+## Rung 7 — production qualification boundary
+
+Production export is another derived-artifact boundary rather than an overwrite of the source.
+
+```text
+editable workspace
+      |
+      v
+production audit
+      |
+      +-- invalid vertices
+      +-- degenerate triangles
+      +-- boundary edges
+      +-- non-manifold edges
+      +-- normals / UVs
+      |
+      v
+profile policy
+      |
+      +-- conservative repair
+      +-- triangle budget
+      +-- LOD ratios
+      |
+      v
+LOD GLB candidates
+      |
+      +-- post-export audit
+      +-- byte length
+      +-- SHA-256
+      |
+      v
+phiform.production-receipt.v1
+```
+
+The source artifact and edit graph remain unchanged. Production packs are derived outputs with their own qualification evidence.
+
+Native engine package formats are not implied by the Godot/Unreal profile names; those profiles currently define GLB-oriented budgets and LOD policies for downstream import.
