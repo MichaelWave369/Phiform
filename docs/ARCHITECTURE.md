@@ -435,3 +435,46 @@ phiform.gltf-validation-receipt.v1
 ```
 
 The upstream report and PhiForm extension-specific checks remain distinguishable in the receipt. PhiForm does not claim Khronos certification or extension semantics that the upstream validator does not advertise.
+
+
+## Rung 14 — governed release authority boundary
+
+Rung 14 is downstream of derivation and validation.
+
+```text
+derived GLB bytes in session
+      |
+      +-- target receipt
+      +-- validation receipt
+      +-- current artifact ID
+      +-- current graph node
+      +-- release policy
+      |
+      v
+release gate
+      |
+      +-- re-hash bytes
+      +-- compare derived receipt
+      +-- compare validation receipt
+      +-- verify target receipt ID
+      +-- enforce PASS/WARNING policy
+      +-- reject FAIL unconditionally
+      |
+      v
+deterministic release ZIP
+      |
+      +-- asset
+      +-- derived receipt
+      +-- validation receipt
+      +-- manifest
+      +-- RELEASE.md
+      |
+      v
+external phiform.release-receipt.v1
+      |
+      +-- final ZIP SHA-256
+      +-- package byte length
+      +-- release decision
+```
+
+A release receipt does not mutate the workspace and does not promote the release ZIP to source authority. It is downstream evidence that one exact derived artifact satisfied one explicit release policy at one point in project lineage.

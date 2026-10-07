@@ -176,7 +176,7 @@ export interface PortableProjectV1 {
   glbBase64?: string
 }
 
-export type PortableProject = PortableProjectV10
+export type PortableProject = PortableProjectV11
 
 
 export interface AgentAuditFingerprint {
@@ -688,6 +688,94 @@ export interface PortableProjectV10 {
   basisuDerivedReceipts: BasisuDerivedReceipt[]
   basisuCompactReceipts: BasisuCompactReceipt[]
   gltfValidationReceipts: GltfValidationReceipt[]
+  latestReceipt?: GenerationReceipt
+  glbBase64?: string
+}
+
+
+export type ReleasePolicyId =
+  | 'strict-pass'
+  | 'allow-warning'
+
+export type ReleaseTarget =
+  | 'basisu-fallback'
+  | 'basisu-compact'
+
+export interface ReleaseFileRecord {
+  path: string
+  role:
+    | 'asset'
+    | 'target-receipt'
+    | 'validation-receipt'
+    | 'manifest'
+    | 'instructions'
+  byteLength: number
+  sha256: string
+}
+
+export interface ReleaseCandidateManifest {
+  schema: 'phiform.release-candidate.v1'
+  createdAt: string
+  releaseId: string
+  sourceArtifactId: string
+  sourceNodeId: string
+  target: ReleaseTarget
+  targetReceiptId: string
+  validationReceiptId: string
+  policyId: ReleasePolicyId
+  acceptedQualifications: Array<'pass' | 'warning'>
+  asset: {
+    path: string
+    filename: string
+    sha256: string
+    byteLength: number
+  }
+  validation: {
+    qualification: 'pass' | 'warning'
+    validatorName: 'Khronos glTF-Validator'
+    validatorVersion: string
+    officialErrors: number
+    officialWarnings: number
+    phiformBasisuStatus: 'pass'
+  }
+  files: ReleaseFileRecord[]
+  notes: string[]
+}
+
+export interface ReleaseCandidateReceipt {
+  schema: 'phiform.release-receipt.v1'
+  id: string
+  createdAt: string
+  releaseId: string
+  sourceArtifactId: string
+  sourceNodeId: string
+  target: ReleaseTarget
+  targetReceiptId: string
+  validationReceiptId: string
+  policyId: ReleasePolicyId
+  packageFilename: string
+  packageByteLength: number
+  packageSha256: string
+  manifest: ReleaseCandidateManifest
+  files: ReleaseFileRecord[]
+  decision: 'released'
+}
+
+export interface PortableProjectV11 {
+  schema: 'phiform.project.v11'
+  savedAt: string
+  artifact: ModelArtifact
+  edits: WorkspaceEditState
+  editGraph: EditGraph
+  agentReceipts: AgentAuditReceipt[]
+  productionReceipts: ProductionReceipt[]
+  enginePackReceipts: EnginePackReceipt[]
+  textureReceipts: TextureReceipt[]
+  textureEncodingReceipts: TextureEncodingReceipt[]
+  basisuDerivedReceipts: BasisuDerivedReceipt[]
+  basisuCompactReceipts: BasisuCompactReceipt[]
+  gltfValidationReceipts: GltfValidationReceipt[]
+  releaseCandidateReceipts: ReleaseCandidateReceipt[]
   latestReceipt?: GenerationReceipt
   glbBase64?: string
 }

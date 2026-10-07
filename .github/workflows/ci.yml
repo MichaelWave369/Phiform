@@ -53,6 +53,9 @@ jobs:
       - name: Official glTF validation receipt contract
         run: npm run gltf:validation:contract
 
+      - name: Governed release candidate contract
+        run: npm run release:contract
+
       - name: Typecheck
         run: npm run check
 

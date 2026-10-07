@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { AgentConsole } from './components/AgentConsole'
 import { EnginePackPanel } from './components/EnginePackPanel'
 import { ProductionPanel } from './components/ProductionPanel'
+import { ReleasePanel } from './components/ReleasePanel'
 import { TexturePanel } from './components/TexturePanel'
 import { Viewport } from './components/Viewport'
 import {
@@ -54,6 +55,9 @@ import type {
   ProductionAudit,
   ProductionProfileId,
   ProductionReceipt,
+  ReleaseCandidateReceipt,
+  ReleasePolicyId,
+  ReleaseTarget,
   TextureAudit,
   TextureEncoderCodec,
   TextureEncoderDescriptor,
@@ -100,6 +104,7 @@ import {
   buildGltfValidationReceipt,
   validateBasisuSemantics,
 } from './gltf/validation'
+import { buildReleaseCandidate } from './release/pack'
 
 interface SessionKtx2Payload {
   textureId: string
@@ -109,6 +114,12 @@ interface SessionKtx2Payload {
 }
 
 interface SessionBasisuDerived {
+  receiptId: string
+  filename: string
+  blob: Blob
+}
+
+interface SessionBasisuCompact {
   receiptId: string
   filename: string
   blob: Blob
@@ -275,6 +286,15 @@ export function App() {
     useState<BasisuCompactReceipt[]>([])
   const [gltfValidationReceipts, setGltfValidationReceipts] =
     useState<GltfValidationReceipt[]>([])
+  const [sessionBasisuCompact, setSessionBasisuCompact] =
+    useState<SessionBasisuCompact | undefined>()
+  const [releaseTarget, setReleaseTarget] =
+    useState<ReleaseTarget>('basisu-compact')
+  const [releasePolicyId, setReleasePolicyId] =
+    useState<ReleasePolicyId>('strict-pass')
+  const [releaseBusy, setReleaseBusy] = useState(false)
+  const [releaseCandidateReceipts, setReleaseCandidateReceipts] =
+    useState<ReleaseCandidateReceipt[]>([])
   const importRef = useRef<HTMLInputElement>(null)
   const agentStateRef = useRef<AgentWorkspaceState>({
     artifact: initialArtifact,
@@ -445,6 +465,8 @@ export function App() {
       setSessionBasisuDerived(undefined)
       setBasisuCompactReceipts([])
       setGltfValidationReceipts([])
+      setSessionBasisuCompact(undefined)
+      setReleaseCandidateReceipts([])
       setTextureAudit(undefined)
       setProjectStatus('')
     } catch (cause) {
@@ -570,6 +592,7 @@ export function App() {
         basisuDerivedReceipts,
         basisuCompactReceipts,
         gltfValidationReceipts,
+        releaseCandidateReceipts,
         latestReceipt,
       )
       setProjectStatus('SAVED LOCALLY')
@@ -595,8 +618,10 @@ export function App() {
     setBasisuDerivedReceipts(project.basisuDerivedReceipts)
     setBasisuCompactReceipts(project.basisuCompactReceipts)
     setGltfValidationReceipts(project.gltfValidationReceipts)
+    setReleaseCandidateReceipts(project.releaseCandidateReceipts)
     setSessionKtx2Payloads([])
     setSessionBasisuDerived(undefined)
+    setSessionBasisuCompact(undefined)
     setProductionAudit(undefined)
     setTextureAudit(undefined)
     setMeshTargets([])
@@ -632,10 +657,11 @@ export function App() {
         basisuDerivedReceipts,
         basisuCompactReceipts,
         gltfValidationReceipts,
+        releaseCandidateReceipts,
         latestReceipt,
       )
       downloadPortableProject(project)
-      setProjectStatus('PROJECT V10 EXPORTED')
+      setProjectStatus('PROJECT V11 EXPORTED')
     } catch (cause) {
       setProjectStatus('')
       setError(cause instanceof Error ? cause.message : 'Project export failed.')
@@ -1266,6 +1292,11 @@ export function App() {
       setBasisuCompactReceipts((current) =>
         [...current, receipt].slice(-50),
       )
+      setSessionBasisuCompact({
+        receiptId: receipt.id,
+        filename: outputFilename,
+        blob: outputBlob,
+      })
 
       setProjectStatus('VALIDATING COMPACT GLB…')
       const validationReceipt = await validateDerivedGlb(
@@ -1296,6 +1327,102 @@ export function App() {
       setProjectStatus('')
     } finally {
       setBasisuCompactBusy(false)
+    }
+  }
+
+  const buildGovernedReleaseCandidate = async () => {
+    setError('')
+    setReleaseBusy(true)
+    try {
+      const targetReceipt =
+        releaseTarget === 'basisu-compact'
+          ? basisuCompactReceipts.at(-1)
+          : basisuDerivedReceipts.at(-1)
+      if (!targetReceipt) {
+        throw new Error(
+          'No derived GLB receipt is available for the selected release target.',
+        )
+      }
+
+      const session =
+        releaseTarget === 'basisu-compact'
+          ? sessionBasisuCompact
+          : sessionBasisuDerived
+      if (!session || session.receiptId !== targetReceipt.id) {
+        throw new Error(
+          'The exact derived GLB bytes are not available in this browser session.',
+        )
+      }
+
+      if (
+        targetReceipt.sourceArtifactId !== artifact.id ||
+        targetReceipt.sourceNodeId !== editGraph.currentNodeId
+      ) {
+        throw new Error(
+          'The selected release target belongs to a different artifact or edit-graph node.',
+        )
+      }
+
+      const validationReceipt = [...gltfValidationReceipts]
+        .reverse()
+        .find(
+          (entry) =>
+            entry.target === releaseTarget &&
+            entry.targetReceiptId === targetReceipt.id,
+        )
+      if (!validationReceipt) {
+        throw new Error(
+          'No matching glTF validation receipt exists for the selected target.',
+        )
+      }
+
+      setProjectStatus('BUILDING GOVERNED RELEASE…')
+      const releaseId =
+        crypto.randomUUID?.() ?? Date.now().toString(36)
+      const built = await buildReleaseCandidate({
+        createdAt: new Date().toISOString(),
+        releaseId,
+        sourceArtifactId: artifact.id,
+        sourceNodeId: editGraph.currentNodeId,
+        target: releaseTarget,
+        policyId: releasePolicyId,
+        assetFilename: session.filename,
+        assetBytes: new Uint8Array(await session.blob.arrayBuffer()),
+        targetReceipt,
+        validationReceipt,
+      })
+
+      setReleaseCandidateReceipts((current) =>
+        [...current, built.receipt].slice(-100),
+      )
+
+      downloadBlob(
+        new Blob([Uint8Array.from(built.zipBytes).buffer], {
+          type: 'application/zip',
+        }),
+        built.receipt.packageFilename,
+      )
+      downloadBlob(
+        new Blob([JSON.stringify(built.receipt, null, 2)], {
+          type: 'application/json',
+        }),
+        `${safeName(artifact.label)}-release-receipt.json`,
+      )
+
+      setProjectStatus(
+        `RELEASED · ${releaseTarget.toUpperCase()} · ` +
+        `${releasePolicyId.toUpperCase()} · ` +
+        `${validationReceipt.qualification.toUpperCase()}`,
+      )
+    } catch (cause) {
+      setProjectStatus('')
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Governed release candidate build failed.',
+      )
+    } finally {
+      setReleaseBusy(false)
     }
   }
 
@@ -1580,7 +1707,7 @@ export function App() {
         </div>
 
         <div className="top-status">
-          <span className="pill"><i /> RUNG 13</span>
+          <span className="pill"><i /> RUNG 14</span>
           <span className="pill muted">
             {editGraph.currentBranch} · {dirty ? 'WORKING TREE DIRTY' : 'COMMITTED'}
           </span>
@@ -2007,6 +2134,31 @@ export function App() {
             }}
           />
 
+          <ReleasePanel
+            target={releaseTarget}
+            policyId={releasePolicyId}
+            busy={releaseBusy}
+            fallbackReceipt={basisuDerivedReceipts.at(-1)}
+            compactReceipt={basisuCompactReceipts.at(-1)}
+            validationReceipts={gltfValidationReceipts}
+            releaseReceipts={releaseCandidateReceipts}
+            fallbackSessionReady={
+              Boolean(sessionBasisuDerived) &&
+              sessionBasisuDerived?.receiptId ===
+                basisuDerivedReceipts.at(-1)?.id
+            }
+            compactSessionReady={
+              Boolean(sessionBasisuCompact) &&
+              sessionBasisuCompact?.receiptId ===
+                basisuCompactReceipts.at(-1)?.id
+            }
+            onTargetChange={setReleaseTarget}
+            onPolicyChange={setReleasePolicyId}
+            onBuild={() => {
+              void buildGovernedReleaseCandidate()
+            }}
+          />
+
           <EnginePackPanel
             engine={engineTarget}
             busy={engineBusy}
@@ -2074,11 +2226,11 @@ export function App() {
           </div>
 
           <div className="authority-note">
-            <span>VALIDATED ≠ CERTIFIED</span>
+            <span>FINAL ≠ UNGOVERNED</span>
             <p>
-              Rung 13 binds the official Khronos validator report to exact GLB bytes and
-              supplements it with PhiForm BasisU checks. The receipt records what was tested;
-              it does not claim Khronos certification or full extension semantics upstream.
+              Rung 14 emits a release candidate only when the exact derived GLB bytes,
+              derived-artifact receipt, validation receipt, current artifact/node, and selected
+              policy all agree. FAIL never ships; WARNING ships only under explicit warning policy.
             </p>
           </div>
         </aside>
