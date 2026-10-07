@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AgentConsole } from './components/AgentConsole'
+import { ProductionPanel } from './components/ProductionPanel'
 import { Viewport } from './components/Viewport'
 import {
   executeAgentCommand,
@@ -43,6 +44,9 @@ import type {
   MeshStats,
   MeshTarget,
   ModelArtifact,
+  ProductionAudit,
+  ProductionProfileId,
+  ProductionReceipt,
   TransformMode,
   Vec3Tuple,
   WorkspaceEditState,
@@ -57,6 +61,8 @@ import type { BridgeBackend } from './neural/bridgeTypes'
 import { LocalBridgeAdapter } from './neural/localBridgeAdapter'
 import { LocalBridgeClient } from './neural/localBridgeClient'
 import { mockAdapter } from './neural/mockAdapter'
+import { productionProfile } from './production/profiles'
+import type { ProductionRuntimeResult } from './production/runtime'
 
 const initialArtifact: ModelArtifact = {
   kind: 'primitive',
@@ -151,6 +157,12 @@ export function App() {
     () => new Set<AgentCapability>(['workspace.read']),
   )
   const [pendingExportFilename, setPendingExportFilename] = useState<string | undefined>()
+  const [productionProfileId, setProductionProfileId] =
+    useState<ProductionProfileId>('web-balanced')
+  const [productionAudit, setProductionAudit] = useState<ProductionAudit | undefined>()
+  const [productionReceipts, setProductionReceipts] = useState<ProductionReceipt[]>([])
+  const [productionRequest, setProductionRequest] = useState(0)
+  const [productionBusy, setProductionBusy] = useState(false)
   const importRef = useRef<HTMLInputElement>(null)
   const agentStateRef = useRef<AgentWorkspaceState>({
     artifact: initialArtifact,
@@ -311,6 +323,8 @@ export function App() {
       setSelected(true)
       setAgentReceipts([])
       agentReceiptsRef.current = []
+      setProductionReceipts([])
+      setProductionAudit(undefined)
       setProjectStatus('')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Generation failed.')
@@ -428,6 +442,7 @@ export function App() {
         edits,
         editGraph,
         agentReceipts,
+        productionReceipts,
         latestReceipt,
       )
       setProjectStatus('SAVED LOCALLY')
@@ -446,6 +461,8 @@ export function App() {
     const importedAgentReceipts = project.agentReceipts as AgentReceipt[]
     setAgentReceipts(importedAgentReceipts)
     agentReceiptsRef.current = importedAgentReceipts
+    setProductionReceipts(project.productionReceipts)
+    setProductionAudit(undefined)
     setMeshTargets([])
     setSelected(true)
   }
@@ -472,10 +489,11 @@ export function App() {
         edits,
         editGraph,
         agentReceipts,
+        productionReceipts,
         latestReceipt,
       )
       downloadPortableProject(project)
-      setProjectStatus('PROJECT V3 EXPORTED')
+      setProjectStatus('PROJECT V4 EXPORTED')
     } catch (cause) {
       setProjectStatus('')
       setError(cause instanceof Error ? cause.message : 'Project export failed.')
@@ -494,6 +512,93 @@ export function App() {
       setProjectStatus('')
       setError(cause instanceof Error ? cause.message : 'Project import failed.')
     }
+  }
+
+  const handleProductionComplete = async (
+    result: ProductionRuntimeResult,
+  ) => {
+    setError('')
+    try {
+      const profile = productionProfile(result.profileId)
+      const files = []
+
+      for (const file of result.files) {
+        const filename =
+          `${safeName(artifact.label)}-${result.profileId}-lod${file.lod}.glb`
+        const sha256 = await sha256Blob(file.blob)
+        files.push({
+          label: `LOD${file.lod}`,
+          filename,
+          lod: file.lod,
+          ratio: file.ratio,
+          triangles: file.audit.totals.triangles,
+          byteLength: file.blob.size,
+          sha256,
+        })
+        downloadBlob(file.blob, filename)
+      }
+
+      let qualification: ProductionReceipt['qualification'] = 'pass'
+      for (const file of result.files) {
+        if (file.audit.qualification === 'fail') qualification = 'fail'
+        else if (
+          qualification === 'pass' &&
+          file.audit.qualification === 'warning'
+        ) {
+          qualification = 'warning'
+        }
+      }
+
+      if (
+        profile.maxTriangles !== null &&
+        files[0] &&
+        files[0].triangles > profile.maxTriangles &&
+        qualification === 'pass'
+      ) {
+        qualification = 'warning'
+      }
+
+      const receipt: ProductionReceipt = {
+        schema: 'phiform.production-receipt.v1',
+        id: `production-receipt-${crypto.randomUUID?.() ?? Date.now().toString(36)}`,
+        createdAt: new Date().toISOString(),
+        sourceArtifactId: artifact.id,
+        sourceNodeId: editGraph.currentNodeId,
+        profileId: result.profileId,
+        qualification,
+        before: result.before,
+        after: result.files.map((file) => file.audit),
+        operations: result.operations,
+        files,
+      }
+
+      setProductionReceipts((current) => [...current, receipt].slice(-50))
+
+      const manifest = new Blob([JSON.stringify(receipt, null, 2)], {
+        type: 'application/json',
+      })
+      downloadBlob(
+        manifest,
+        `${safeName(artifact.label)}-${result.profileId}-production.json`,
+      )
+      setProjectStatus(
+        `PRODUCTION PACK ${qualification.toUpperCase()} · ${files.length} GLB`,
+      )
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Production receipt generation failed.',
+      )
+    } finally {
+      setProductionBusy(false)
+    }
+  }
+
+  const buildProductionPack = () => {
+    setProductionBusy(true)
+    setProjectStatus('BUILDING PRODUCTION PACK…')
+    setProductionRequest((value) => value + 1)
   }
 
   const handleEditedExport = async (blob: Blob) => {
@@ -555,7 +660,7 @@ export function App() {
         </div>
 
         <div className="top-status">
-          <span className="pill"><i /> RUNG 6</span>
+          <span className="pill"><i /> RUNG 7</span>
           <span className="pill muted">
             {editGraph.currentBranch} · {dirty ? 'WORKING TREE DIRTY' : 'COMMITTED'}
           </span>
@@ -668,12 +773,16 @@ export function App() {
             selected={selected}
             target={target}
             exportRequest={exportRequest}
+            productionProfileId={productionProfileId}
+            productionRequest={productionRequest}
             onSelectedChange={setSelected}
             onTargetChange={setTarget}
             onMeshTargetsChange={setMeshTargets}
             onEditsChange={setEdits}
             onStatsChange={setMeshStats}
+            onProductionAuditChange={setProductionAudit}
             onExportComplete={(blob) => { void handleEditedExport(blob) }}
+            onProductionComplete={(result) => { void handleProductionComplete(result) }}
             onError={setError}
           />
 
@@ -708,7 +817,7 @@ export function App() {
             <div><span>GRAPH NODES</span><strong>{graphNodes.length}</strong></div>
             <div><span>BRANCHES</span><strong>{Object.keys(editGraph.branches).length}</strong></div>
             <div><span>AGENT RECEIPTS</span><strong>{agentReceipts.length}</strong></div>
-            <div><span>AGENT GRANTS</span><strong>{agentGrants.size}</strong></div>
+            <div><span>PROD RECEIPTS</span><strong>{productionReceipts.length}</strong></div>
           </div>
 
           <div className="editor-card">
@@ -911,6 +1020,15 @@ export function App() {
             )}
           </div>
 
+          <ProductionPanel
+            profileId={productionProfileId}
+            audit={productionAudit}
+            receipts={productionReceipts}
+            busy={productionBusy}
+            onProfileChange={setProductionProfileId}
+            onBuild={buildProductionPack}
+          />
+
           <AgentConsole
             state={agentStateFingerprint}
             meshTargets={meshTargets}
@@ -970,11 +1088,11 @@ export function App() {
           </div>
 
           <div className="authority-note">
-            <span>CAPABILITY ≠ AUTHORITY</span>
+            <span>QUALIFIED ≠ PERFECT</span>
             <p>
-              Agent commands are explicit verbs with operator-granted capabilities,
-              stale-state preconditions, replay protection, and receipts. Browser agents
-              use the same command executor as this console through window.PhiFormAgent.
+              Production status reports exactly what PhiForm measured. Conservative
+              repairs can remove indexed degenerates and recompute normals; open and
+              non-manifold topology remains visible until a qualified repair method exists.
             </p>
           </div>
         </aside>
