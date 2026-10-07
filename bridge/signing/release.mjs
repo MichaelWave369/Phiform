@@ -174,7 +174,13 @@ export function createReleaseSigner(env = process.env) {
     }
   }
 
-  return { descriptor, attest }
+  return {
+    descriptor,
+    authorized(providedToken) {
+      return tokenMatches(token, providedToken)
+    },
+    attest,
+  }
 }
 
 export function verifyReleaseAttestation(attestation) {
