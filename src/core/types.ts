@@ -327,7 +327,7 @@ export interface EnginePackManifest {
   }
   collision: {
     kind: CollisionProxyKind
-    nodeName: string
+    nodeNames: string[]
     embeddedInImportScene: true
   }
   lods: Array<{
