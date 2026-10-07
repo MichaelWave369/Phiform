@@ -17,6 +17,10 @@ import {
 } from '../engine/pack'
 import type { EngineRuntimeResult } from '../engine/runtime'
 import { auditTextures } from '../texture/audit'
+import {
+  prepareTexturePngSources,
+  type PreparedTexturePng,
+} from '../texture/sourcePng'
 import type {
   EditTarget,
   EngineTarget,
@@ -181,6 +185,7 @@ interface ViewportProps {
   engineTarget: EngineTarget
   engineRequest: number
   textureProfileId: TextureProfileId
+  textureEncodeRequest: number
   onSelectedChange: (selected: boolean) => void
   onTargetChange: (target: EditTarget) => void
   onMeshTargetsChange: (targets: MeshTarget[]) => void
@@ -188,6 +193,10 @@ interface ViewportProps {
   onStatsChange: (stats: MeshStats) => void
   onProductionAuditChange: (audit: ProductionAudit) => void
   onTextureAuditChange: (audit: TextureAudit) => void
+  onTextureSourcesReady: (
+    audit: TextureAudit,
+    sources: PreparedTexturePng[],
+  ) => void
   onExportComplete: (blob: Blob) => void
   onProductionComplete: (result: ProductionRuntimeResult) => void
   onEngineComplete: (result: EngineRuntimeResult) => void
@@ -206,6 +215,7 @@ export function Viewport({
   engineTarget,
   engineRequest,
   textureProfileId,
+  textureEncodeRequest,
   onSelectedChange,
   onTargetChange,
   onMeshTargetsChange,
@@ -213,6 +223,7 @@ export function Viewport({
   onStatsChange,
   onProductionAuditChange,
   onTextureAuditChange,
+  onTextureSourcesReady,
   onExportComplete,
   onProductionComplete,
   onEngineComplete,
@@ -229,6 +240,7 @@ export function Viewport({
   const exportSeenRef = useRef(0)
   const productionSeenRef = useRef(0)
   const engineSeenRef = useRef(0)
+  const textureEncodeSeenRef = useRef(0)
   const [loadState, setLoadState] = useState<'ready' | 'loading' | 'error'>('ready')
 
   useEffect(() => {
@@ -522,6 +534,37 @@ export function Viewport({
     if (!object) return
     onTextureAuditChange(auditTextures(object, textureProfileId))
   }, [textureProfileId])
+
+  useEffect(() => {
+    if (
+      textureEncodeRequest <= 0 ||
+      textureEncodeRequest === textureEncodeSeenRef.current
+    ) {
+      return
+    }
+    textureEncodeSeenRef.current = textureEncodeRequest
+
+    const object = objectRef.current
+    if (!object) {
+      onError('Nothing is loaded for texture encoding.')
+      return
+    }
+
+    const audit = auditTextures(object, textureProfileId)
+    onTextureAuditChange(audit)
+
+    prepareTexturePngSources(object, audit)
+      .then((sources) => {
+        onTextureSourcesReady(audit, sources)
+      })
+      .catch((cause) => {
+        onError(
+          cause instanceof Error
+            ? cause.message
+            : 'Texture source preparation failed.',
+        )
+      })
+  }, [textureEncodeRequest])
 
   useEffect(() => {
     if (

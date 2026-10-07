@@ -1,5 +1,7 @@
 import type {
   TextureAudit,
+  TextureEncoderDescriptor,
+  TextureEncodingReceipt,
   TextureProfileId,
   TextureReceipt,
 } from '../core/types'
@@ -9,8 +11,14 @@ interface TexturePanelProps {
   profileId: TextureProfileId
   audit?: TextureAudit
   receipts: readonly TextureReceipt[]
+  encodingReceipts: readonly TextureEncodingReceipt[]
+  encoder?: TextureEncoderDescriptor
+  encoderStatus: 'idle' | 'checking' | 'online' | 'error'
+  encodingBusy: boolean
   onProfileChange: (profileId: TextureProfileId) => void
   onRecord: () => void
+  onProbeEncoder: () => void
+  onExecuteEncoding: () => void
 }
 
 function bytes(value: number): string {
@@ -23,11 +31,24 @@ export function TexturePanel({
   profileId,
   audit,
   receipts,
+  encodingReceipts,
+  encoder,
+  encoderStatus,
+  encodingBusy,
   onProfileChange,
   onRecord,
+  onProbeEncoder,
+  onExecuteEncoding,
 }: TexturePanelProps) {
   const profile = TEXTURE_PROFILES[profileId]
   const latest = receipts.at(-1)
+  const latestEncoding = encodingReceipts.at(-1)
+  const canExecute =
+    Boolean(audit) &&
+    audit?.qualification !== 'fail' &&
+    (audit?.totals.textures ?? 0) > 0 &&
+    encoder?.available === true &&
+    !encodingBusy
 
   return (
     <div className="texture-card">
@@ -103,22 +124,69 @@ export function TexturePanel({
       )}
 
       <button className="texture-record" disabled={!audit} onClick={onRecord}>
-        RECORD TEXTURE RECEIPT + KTX2 PLAN
+        RECORD QUALIFICATION + KTX2 PLAN
       </button>
 
+      <div className="texture-encoder">
+        <div className="texture-encoder-head">
+          <div>
+            <span>EXECUTION BACKEND</span>
+            <strong>{encoder?.label ?? 'Khronos KTX Software'}</strong>
+          </div>
+          <i className={encoderStatus}>{encoderStatus.toUpperCase()}</i>
+        </div>
+
+        <p>
+          {encoder?.available
+            ? `${encoder.version ?? 'version unknown'} · ${encoder.codecs.join(' / ')}`
+            : encoder?.statusReason ?? 'Probe the localhost bridge for the ktx executable.'}
+        </p>
+
+        <div className="texture-encoder-actions">
+          <button
+            disabled={encoderStatus === 'checking' || encodingBusy}
+            onClick={onProbeEncoder}
+          >
+            {encoderStatus === 'checking' ? 'PROBING…' : 'CHECK KTX ENCODER'}
+          </button>
+          <button
+            className="execute"
+            disabled={!canExecute}
+            onClick={onExecuteEncoding}
+          >
+            {encodingBusy ? 'ENCODING BASIS KTX2…' : 'EXECUTE BASIS KTX2'}
+          </button>
+        </div>
+      </div>
+
       <p className="texture-caveat">
-        KTX2/Basis entries are a compression plan only in Rung 9. PhiForm does
-        not claim compressed bytes until an encoder actually produces them.
+        Rung 10 only marks compression executed after Khronos KTX returns
+        valid KTX2 bytes and the browser independently verifies every SHA-256.
       </p>
 
       {latest && (
         <div className="texture-receipt">
-          <span>LATEST TEXTURE RECEIPT</span>
+          <span>LATEST QUALIFICATION RECEIPT</span>
           <strong>{latest.profileId} · {latest.audit.qualification}</strong>
           <small>
             {latest.audit.totals.textures} textures · {latest.compressionPlan.length} planned encodes
           </small>
           <p>{latest.id}</p>
+        </div>
+      )}
+
+      {latestEncoding && (
+        <div className="texture-execution-receipt">
+          <span>LATEST EXECUTED ENCODING</span>
+          <strong>
+            {latestEncoding.artifacts.length} KTX2 · {latestEncoding.encoderVersion}
+          </strong>
+          <small>
+            {bytes(latestEncoding.totalSourcePngBytes)} PNG → {bytes(latestEncoding.totalOutputBytes)} KTX2
+          </small>
+          <p>
+            ratio {latestEncoding.aggregateCompressionRatio.toFixed(2)}× · hashes browser-verified
+          </p>
         </div>
       )}
     </div>

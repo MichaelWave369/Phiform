@@ -112,3 +112,37 @@ See [SF3D.md](SF3D.md).
 CI always qualifies the proof backend.
 
 For SF3D integration, CI supplies a small external CLI fixture that reproduces the output contract only. This proves process orchestration and artifact handling. It does **not** claim neural inference, model installation, CUDA availability, Hugging Face authorization, or visual quality.
+
+
+## Texture encoder API — Rung 10
+
+The local bridge also exposes an optional Khronos KTX encoder boundary.
+
+```text
+GET  /v1/texture-encoder
+POST /v1/texture-jobs
+GET  /v1/texture-jobs/:id
+GET  /texture-artifacts/:id.ktx2
+```
+
+The encoder defaults to the executable name `ktx`.
+
+Override it with:
+
+```text
+PHIFORM_KTX_BIN
+```
+
+The browser submits one normalized PNG per job with:
+
+- texture ID
+- codec allowlisted as `basis-lz` or `uastc-ldr-4x4`
+- `srgb` or `linear` transfer semantics
+- source SHA-256
+- PNG bytes
+
+The bridge recomputes the source hash before execution.
+
+Texture request bodies allow up to 128 MiB because a lossless 4K RGBA PNG can be substantially larger than the generation bridge's ordinary request envelope.
+
+Successful jobs expose immutable in-memory KTX2 bytes until the bridge restarts. The project receipt stores hashes and downloaded outputs; the localhost artifact URL is not treated as durable project identity.
