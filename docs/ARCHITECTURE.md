@@ -133,3 +133,34 @@ bridge/dev-server.mjs
 The bridge reports SF3D as unavailable when its local checkout is not configured. This keeps model installation, gated access, native dependencies, and third-party license terms outside PhiForm's MIT distribution.
 
 CI qualifies the external process and GLB handoff using a CLI-shape fixture. It does not claim a neural model run.
+
+
+## Rung 6 — governed agent command boundary
+
+Agent access terminates at a command registry.
+
+```text
+agent
+  |
+  v
+command envelope
+  |
+  +-- replay gate
+  +-- capability gate
+  +-- optimistic state gate
+  |
+  v
+deterministic command executor
+  |
+  +-- workspace edit state
+  +-- edit graph
+  +-- target inventory
+  +-- export dispatch
+  |
+  v
+agent receipt
+```
+
+The browser publishes the same boundary at `window.PhiFormAgent` that the built-in Agent Command Rail uses.
+
+An agent does not receive generic application authority by being able to call the API. Each verb maps to one declared capability, and capability grants are operator-controlled.
