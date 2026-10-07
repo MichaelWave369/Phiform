@@ -178,15 +178,15 @@ The receipt for a neural-intent node explicitly states that no localized neural 
 
 ## Project migration
 
-Rung 5 saves use:
+Rung 6 saves use:
 
 ```text
-phiform.project.v2
+phiform.project.v3
 ```
 
-Rung 4 project v1 files remain importable.
+Project v1 and v2 files remain importable.
 
-When a v1 project is loaded, PhiForm creates a new edit graph whose source node reflects the saved artifact and workspace state. No fake historical nodes are invented for edits that predate graph support.
+A v1 project receives a source edit graph during migration. A v2 project retains its existing edit graph. Both migrate with an empty agent audit trail because PhiForm does not invent commands or receipts that never occurred.
 
 ## Qualification
 
