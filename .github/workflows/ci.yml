@@ -50,6 +50,9 @@ jobs:
       - name: Compact required-BasisU GLB contract
         run: npm run basisu:compact:contract
 
+      - name: Official glTF validation receipt contract
+        run: npm run gltf:validation:contract
+
       - name: Typecheck
         run: npm run check
 

@@ -4,9 +4,9 @@
 
 > Neural systems may propose geometry. The workspace keeps editable state, provenance, and export authority.
 
-## Current state — v0.12 / Rung 12
+## Current state — v0.13 / Rung 13
 
-PhiForm now safely compacts full-coverage BasisU GLBs by removing superseded PNG/JPEG fallbacks, making `KHR_texture_basisu` required, and physically repacking the embedded BIN data.
+PhiForm now binds official Khronos glTF validation reports to exact derived GLB hashes and supplements them with PhiForm-specific BasisU semantic checks.
 
 ### Rung 1 — workbench foundation ✅
 React/TypeScript studio, Three.js viewport, adapter contract, proof generation, receipts.
@@ -124,6 +124,24 @@ Topology/attribute audit, conservative repair, Meshopt-backed LOD generation, pr
 - project v9 persistence
 - CI proves real GLB byte savings, not JSON-only cleanup
 
+### Rung 13 — official glTF validation receipts ✅
+- official `gltf-validator` NPM package from KhronosGroup
+- localhost `POST /v1/gltf-validate` bridge boundary
+- validator version captured from the report
+- exact submitted GLB SHA-256 + byte length echoed and verified
+- Khronos errors / warnings / infos / hints preserved
+- issue code, severity, pointer/offset, and message preserved
+- `extensionsUsed` / `extensionsRequired` observed from the report
+- PhiForm-specific `KHR_texture_basisu` semantic checks
+- fallback-bearing and compact BasisU validation profiles
+- PASS / WARNING / FAIL policy
+- informational-only reports remain PASS
+- warnings become WARNING
+- official errors or PhiForm BasisU failures become FAIL
+- `phiform.gltf-validation-receipt.v1`
+- project v10 persistence of validation receipts
+- Rung 11 and Rung 12 outputs validated against the exact bytes before final status
+
 ## Engine pack structure
 
 A typical pack looks like:
@@ -234,6 +252,7 @@ npm run texture:contract
 npm run texture:encode:contract
 npm run basisu:contract
 npm run basisu:compact:contract
+npm run gltf:validation:contract
 npm run check
 npm run build
 ```
@@ -243,12 +262,12 @@ npm run build
 New saves use:
 
 ```text
-phiform.project.v9
+phiform.project.v10
 ```
 
-Project v9 preserves generation evidence, workspace state, edit lineage, agent receipts, production receipts, engine-pack receipts, texture qualification receipts, executed KTX2 receipts, BasisU-derived GLB receipts, compact BasisU receipts, and embedded source GLB bytes.
+Project v10 preserves generation evidence, workspace state, edit lineage, agent receipts, production receipts, engine-pack receipts, texture qualification receipts, executed KTX2 receipts, BasisU-derived GLB receipts, compact BasisU receipts, glTF validation receipts, and embedded source GLB bytes.
 
-Project v1 through v8 remain importable. Migration never invents history for capabilities that did not exist yet.
+Project v1 through v9 remain importable. Migration never invents history for capabilities that did not exist yet.
 
 ## Documentation
 
@@ -265,10 +284,11 @@ Project v1 through v8 remain importable. Migration never invents history for cap
 - [Executed KTX2 / Basis encoding](docs/KTX2_ENCODING.md)
 - [KHR_texture_basisu derived GLB](docs/BASISU_GLB.md)
 - [Compact required-BasisU GLB](docs/BASISU_COMPACTION.md)
+- [glTF validation receipts](docs/GLTF_VALIDATION.md)
 
 ## Next
 
-Likely next production work includes visual texture error metrics, qualified manifold repair, better collision proxies, semantic retopology, and engine-side validation of compact BasisU imports.
+Likely next production work includes release gating on validation receipts, visual texture error metrics, qualified manifold repair, better collision proxies, semantic retopology, and engine-side validation of compact BasisU imports.
 
 ## License
 

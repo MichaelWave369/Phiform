@@ -1,6 +1,6 @@
 {
   "name": "phiform",
-  "version": "0.12.0",
+  "version": "0.13.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -18,13 +18,15 @@
     "texture:contract": "tsx scripts/texture-material-check.ts",
     "texture:encode:contract": "node scripts/texture-encoder-check.mjs",
     "basisu:contract": "tsx scripts/basisu-glb-check.ts",
-    "basisu:compact:contract": "tsx scripts/basisu-compact-check.ts"
+    "basisu:compact:contract": "tsx scripts/basisu-compact-check.ts",
+    "gltf:validation:contract": "tsx scripts/gltf-validation-check.ts"
   },
   "dependencies": {
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "three": "^0.180.0",
-    "fflate": "^0.8.2"
+    "fflate": "^0.8.2",
+    "gltf-validator": "2.0.0-dev.3.10"
   },
   "devDependencies": {
     "@types/react": "^19.1.16",

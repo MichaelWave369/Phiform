@@ -71,7 +71,7 @@ try {
   const health = await waitForHealth()
   assert.equal(health.schema, 'phiform.bridge.health.v1')
   assert.equal(health.status, 'ok')
-  assert.equal(health.bridgeVersion, '0.4.0')
+  assert.equal(health.bridgeVersion, '0.5.0')
 
   const backendResponse = await fetch(`${base}/v1/backends`)
   assert.equal(backendResponse.status, 200)
@@ -102,6 +102,38 @@ try {
   const proofAccepted = await proofSubmit.json()
   const proofJob = await waitForJob(proofAccepted.id)
   const proofArtifact = await validateArtifact(proofJob)
+
+  const officialValidation = await fetch(`${base}/v1/gltf-validate`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      filename: 'proof-contract.glb',
+      sha256: proofArtifact.sha256,
+      glbBase64: proofArtifact.glb.toString('base64'),
+    }),
+  })
+  assert.equal(officialValidation.status, 200)
+  const validation = await officialValidation.json()
+  assert.equal(validation.schema, 'phiform.gltf-validation-response.v1')
+  assert.equal(validation.sha256, proofArtifact.sha256)
+  assert.equal(validation.byteLength, proofArtifact.glb.length)
+  assert.equal(
+    validation.report.validator.name,
+    'Khronos glTF-Validator',
+  )
+  assert.match(validation.report.validator.version, /^2\./)
+  assert.equal(validation.report.issues.numErrors, 0)
+
+  const forgedValidation = await fetch(`${base}/v1/gltf-validate`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      filename: 'proof-contract.glb',
+      sha256: '0'.repeat(64),
+      glbBase64: proofArtifact.glb.toString('base64'),
+    }),
+  })
+  assert.equal(forgedValidation.status, 400)
 
   const missingImage = await fetch(`${base}/v1/jobs`, {
     method: 'POST',
@@ -141,6 +173,8 @@ try {
     [
       `PASS proof bridge: ${proofJob.id} ${proofArtifact.sha256.slice(0, 12)}…`,
       `PASS SF3D adapter contract: ${neuralJob.id} ${neuralArtifact.sha256.slice(0, 12)}…`,
+      `PASS official glTF validation: ${validation.report.validator.version}`,
+      'PASS forged GLB validation hash rejected',
       'NOTE CI uses a CLI fixture; it does not claim neural inference.',
     ].join('\n') + '\n',
   )

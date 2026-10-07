@@ -399,3 +399,39 @@ phiform.basisu-compact-receipt.v1
 ```
 
 The compact file is a new derived artifact. Rung 12 never rewrites the editable source or destroys the fallback-bearing Rung 11 output.
+
+
+## Rung 13 — validation evidence boundary
+
+Derived GLB validation terminates at a localhost wrapper around the official Khronos glTF Validator.
+
+```text
+derived GLB bytes
+      |
+      +-- browser SHA-256
+      |
+      v
+localhost validation endpoint
+      |
+      +-- recompute SHA-256
+      +-- Khronos glTF-Validator
+      |
+      v
+official report
+      |
+      +-- errors / warnings / infos / hints
+      +-- issue codes + pointers
+      +-- validator version
+      +-- extensions observed
+      |
+      +-----------------------------+
+      |                             |
+      | PhiForm BasisU checks      |
+      | for fallback/compact form  |
+      +-------------+---------------+
+                    |
+                    v
+phiform.gltf-validation-receipt.v1
+```
+
+The upstream report and PhiForm extension-specific checks remain distinguishable in the receipt. PhiForm does not claim Khronos certification or extension semantics that the upstream validator does not advertise.

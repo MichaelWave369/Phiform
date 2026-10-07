@@ -2257,3 +2257,66 @@ textarea:focus {
   color: #927f62;
   font: 7px ui-monospace, SFMono-Regular, Menlo, monospace;
 }
+
+
+.gltf-validation-receipt {
+  margin-top: 8px;
+  padding: 9px;
+  border: 1px solid #34414a;
+  border-radius: 7px;
+  background: #0a1014;
+}
+
+.gltf-validation-receipt span,
+.gltf-validation-receipt strong,
+.gltf-validation-receipt small {
+  display: block;
+}
+
+.gltf-validation-receipt span {
+  color: #72818a;
+  font-size: 7px;
+  letter-spacing: 0.09em;
+}
+
+.gltf-validation-receipt strong {
+  margin-top: 4px;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.gltf-validation-receipt small {
+  margin-top: 3px;
+  color: #697780;
+  font: 7px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.gltf-validation-receipt p {
+  margin: 5px 0 0;
+  color: #74818a;
+  font: 7px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.gltf-validation-receipt.pass {
+  border-color: #2d5646;
+}
+
+.gltf-validation-receipt.pass strong {
+  color: #8fd5b6;
+}
+
+.gltf-validation-receipt.warning {
+  border-color: #65542f;
+}
+
+.gltf-validation-receipt.warning strong {
+  color: #dbc078;
+}
+
+.gltf-validation-receipt.fail {
+  border-color: #65353d;
+}
+
+.gltf-validation-receipt.fail strong {
+  color: #df969f;
+}

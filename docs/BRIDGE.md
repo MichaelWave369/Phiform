@@ -146,3 +146,36 @@ The bridge recomputes the source hash before execution.
 Texture request bodies allow up to 128 MiB because a lossless 4K RGBA PNG can be substantially larger than the generation bridge's ordinary request envelope.
 
 Successful jobs expose immutable in-memory KTX2 bytes until the bridge restarts. The project receipt stores hashes and downloaded outputs; the localhost artifact URL is not treated as durable project identity.
+
+
+## Official glTF validation — Rung 13
+
+The bridge exposes:
+
+```text
+POST /v1/gltf-validate
+```
+
+Input:
+
+- `filename`
+- optional expected `sha256`
+- `glbBase64`
+- optional `maxIssues` between 1 and 2000
+
+The bridge recomputes SHA-256 before invoking the official KhronosGroup `gltf-validator` NPM package.
+
+A mismatched submitted hash returns HTTP 400.
+
+The response normalizes:
+
+- validator name/version
+- MIME type
+- issue counts
+- issue messages
+- truncated state
+- glTF version/generator when available
+- extensions used/required
+- exact GLB SHA-256 and byte length
+
+Bridge protocol version is `0.5.0`.

@@ -3,6 +3,7 @@ import { createServer } from 'node:http'
 import { proofBackend } from './backends/proof.mjs'
 import { createSf3dBackend } from './backends/sf3d.mjs'
 import { createKtxEncoder, KTX_CODECS } from './texture/ktx.mjs'
+import { validateGlbBytes } from './validation/gltf.mjs'
 
 const host = process.env.PHIFORM_BRIDGE_HOST || '127.0.0.1'
 const port = Number(process.env.PHIFORM_BRIDGE_PORT || 8787)
@@ -155,7 +156,7 @@ const server = createServer(async (req, res) => {
       json(res, 200, {
         schema: 'phiform.bridge.health.v1',
         status: 'ok',
-        bridgeVersion: '0.4.0',
+        bridgeVersion: '0.5.0',
       })
       return
     }
@@ -168,6 +169,52 @@ const server = createServer(async (req, res) => {
       json(res, 200, textureEncoder.probe())
       return
     }
+    if (req.method === 'POST' && url.pathname === '/v1/gltf-validate') {
+      const body = await readJson(req, 192 * 1024 * 1024)
+      if (
+        typeof body.glbBase64 !== 'string' ||
+        !body.glbBase64
+      ) {
+        json(res, 400, { error: 'glbBase64 is required' })
+        return
+      }
+
+      const bytes = Buffer.from(body.glbBase64, 'base64')
+      const sha256 = createHash('sha256').update(bytes).digest('hex')
+
+      if (
+        typeof body.sha256 === 'string' &&
+        body.sha256 &&
+        body.sha256 !== sha256
+      ) {
+        json(res, 400, {
+          error: 'GLB SHA-256 does not match submitted bytes',
+        })
+        return
+      }
+
+      const report = await validateGlbBytes(bytes, {
+        uri:
+          typeof body.filename === 'string' && body.filename
+            ? body.filename
+            : 'asset.glb',
+        maxIssues:
+          Number.isInteger(body.maxIssues) &&
+          body.maxIssues > 0 &&
+          body.maxIssues <= 2000
+            ? body.maxIssues
+            : 250,
+      })
+
+      json(res, 200, {
+        schema: 'phiform.gltf-validation-response.v1',
+        sha256,
+        byteLength: bytes.length,
+        report,
+      })
+      return
+    }
+
 
     if (req.method === 'POST' && url.pathname === '/v1/texture-jobs') {
       const body = await readJson(req, 128 * 1024 * 1024)
@@ -351,6 +398,6 @@ const server = createServer(async (req, res) => {
 server.listen(port, host, () => {
   const available = implementations.filter((item) => item.descriptor.available)
   process.stdout.write(
-    `PhiForm local bridge v0.4.0 listening on http://${host}:${port} · ${available.length}/${implementations.length} backends available\n`,
+    `PhiForm local bridge v0.5.0 listening on http://${host}:${port} · ${available.length}/${implementations.length} backends available\n`,
   )
 })
