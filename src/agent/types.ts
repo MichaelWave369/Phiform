@@ -1,6 +1,8 @@
 import type {
+  AgentAuditReceipt,
   EditGraph,
   EditTarget,
+  MeshTarget,
   ModelArtifact,
   Vec3Tuple,
   WorkspaceEditState,
@@ -20,6 +22,7 @@ export type AgentCommandName =
   | 'workspace.transform.set'
   | 'workspace.material.set'
   | 'target.artifact'
+  | 'target.mesh'
   | 'graph.commit'
   | 'graph.branch'
   | 'graph.checkout'
@@ -61,6 +64,7 @@ export type AgentCommand =
       }
     >
   | AgentCommandBase<'target.artifact', Record<string, never>>
+  | AgentCommandBase<'target.mesh', { id: string }>
   | AgentCommandBase<'graph.commit', { label?: string }>
   | AgentCommandBase<'graph.branch', { name: string }>
   | AgentCommandBase<'graph.checkout', { nodeId: string }>
@@ -78,6 +82,7 @@ export interface AgentWorkspaceState {
   edits: WorkspaceEditState
   editGraph: EditGraph
   target: EditTarget
+  meshTargets: MeshTarget[]
 }
 
 export interface AgentStateFingerprint {
@@ -93,19 +98,12 @@ export interface AgentEffect {
   filename?: string
 }
 
-export interface AgentReceipt {
-  schema: 'phiform.agent-receipt.v1'
-  id: string
-  commandId: string
-  agentId: string
+export interface AgentReceipt extends AgentAuditReceipt {
   command: AgentCommandName
   capability: AgentCapability
-  status: 'executed' | 'rejected'
-  createdAt: string
+  status: 'executed' | 'dispatched' | 'rejected'
   before: AgentStateFingerprint
   after: AgentStateFingerprint
-  reason?: string
-  result?: Record<string, unknown>
   effects: AgentEffect[]
 }
 
