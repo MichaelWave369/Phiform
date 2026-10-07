@@ -32,6 +32,9 @@ jobs:
       - name: Agent command contract
         run: npm run agent:contract
 
+      - name: Production geometry contract
+        run: npm run production:contract
+
       - name: Typecheck
         run: npm run check
 
