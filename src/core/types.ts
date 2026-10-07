@@ -176,7 +176,7 @@ export interface PortableProjectV1 {
   glbBase64?: string
 }
 
-export type PortableProject = PortableProjectV6
+export type PortableProject = PortableProjectV7
 
 
 export interface AgentAuditFingerprint {
@@ -464,6 +464,68 @@ export interface PortableProjectV6 {
   productionReceipts: ProductionReceipt[]
   enginePackReceipts: EnginePackReceipt[]
   textureReceipts: TextureReceipt[]
+  latestReceipt?: GenerationReceipt
+  glbBase64?: string
+}
+
+
+export type TextureEncoderCodec = 'basis-lz' | 'uastc-ldr-4x4'
+
+export interface TextureEncoderDescriptor {
+  schema: 'phiform.texture-encoder.v1'
+  id: 'khronos.ktx.v1'
+  label: string
+  available: boolean
+  executable: string
+  version?: string
+  codecs: TextureEncoderCodec[]
+  statusReason?: string
+}
+
+export interface TextureEncodeArtifact {
+  textureId: string
+  name: string
+  roles: TextureRole[]
+  codec: TextureEncoderCodec
+  sourceKtx2Sha256: string
+  sourceKtx2ByteLength: number
+  outputSha256: string
+  outputByteLength: number
+  outputFilename: string
+  outputUrl?: string
+  compressionRatio: number
+  browserHashVerified: true
+}
+
+export interface TextureEncodingReceipt {
+  schema: 'phiform.texture-encode-receipt.v1'
+  id: string
+  createdAt: string
+  sourceArtifactId: string
+  sourceNodeId: string
+  profileId: TextureProfileId
+  encoderId: 'khronos.ktx.v1'
+  encoderVersion: string
+  compressionExecuted: true
+  allOutputsValidated: true
+  totalSourceKtx2Bytes: number
+  totalOutputBytes: number
+  aggregateCompressionRatio: number
+  artifacts: TextureEncodeArtifact[]
+  notes: string[]
+}
+
+export interface PortableProjectV7 {
+  schema: 'phiform.project.v7'
+  savedAt: string
+  artifact: ModelArtifact
+  edits: WorkspaceEditState
+  editGraph: EditGraph
+  agentReceipts: AgentAuditReceipt[]
+  productionReceipts: ProductionReceipt[]
+  enginePackReceipts: EnginePackReceipt[]
+  textureReceipts: TextureReceipt[]
+  textureEncodingReceipts: TextureEncodingReceipt[]
   latestReceipt?: GenerationReceipt
   glbBase64?: string
 }
