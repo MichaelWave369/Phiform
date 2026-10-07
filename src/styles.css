@@ -1708,3 +1708,230 @@ textarea:focus {
   color: #7d718c;
   font: 7px ui-monospace, SFMono-Regular, Menlo, monospace;
 }
+
+
+.texture-card {
+  margin-top: 16px;
+  padding: 13px;
+  border: 1px solid #2f4558;
+  border-radius: 10px;
+  background:
+    linear-gradient(150deg, rgba(46, 91, 124, 0.14), transparent 42%),
+    #090e13;
+}
+
+.texture-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.texture-head strong {
+  display: block;
+  color: #a9cfe2;
+  font-size: 10px;
+}
+
+.texture-head > span {
+  padding: 5px 7px;
+  border-radius: 999px;
+  font-size: 8px;
+  letter-spacing: 0.09em;
+}
+
+.texture-head > span.pass {
+  border: 1px solid #2a5644;
+  color: #7fd2aa;
+}
+
+.texture-head > span.warning {
+  border: 1px solid #67542f;
+  color: #d8bd76;
+}
+
+.texture-head > span.fail {
+  border: 1px solid #66363d;
+  color: #df979f;
+}
+
+.texture-head > span.none {
+  border: 1px solid #33404a;
+  color: #75858f;
+}
+
+.texture-card select {
+  width: 100%;
+  padding: 8px 9px;
+  border: 1px solid #2a3a46;
+  border-radius: 7px;
+  outline: none;
+  background: #0a1015;
+  color: #afc5d0;
+  font-size: 9px;
+}
+
+.texture-card .field-label {
+  margin-top: 11px;
+}
+
+.texture-profile-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.texture-profile-meta span {
+  padding: 5px 6px;
+  border: 1px solid #293943;
+  border-radius: 5px;
+  color: #6c808a;
+  font-size: 7px;
+  letter-spacing: 0.06em;
+}
+
+.texture-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.texture-metrics > div {
+  padding: 7px 8px;
+  border: 1px solid #253540;
+  border-radius: 6px;
+  background: #091015;
+}
+
+.texture-metrics span,
+.texture-metrics strong {
+  display: block;
+}
+
+.texture-metrics span {
+  color: #627985;
+  font-size: 7px;
+  letter-spacing: 0.08em;
+}
+
+.texture-metrics strong {
+  margin-top: 3px;
+  color: #a9bfca;
+  font: 9px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.texture-notes {
+  margin-top: 9px;
+}
+
+.texture-notes p {
+  margin: 4px 0 0;
+  color: #6c7880;
+  font-size: 8px;
+  line-height: 1.4;
+}
+
+.texture-list {
+  display: grid;
+  gap: 5px;
+  margin-top: 10px;
+  max-height: 190px;
+  overflow: auto;
+}
+
+.texture-list > div {
+  padding: 7px 8px;
+  border: 1px solid #24313a;
+  border-radius: 6px;
+  background: #0a0f14;
+}
+
+.texture-list strong,
+.texture-list span,
+.texture-list small {
+  display: block;
+}
+
+.texture-list strong {
+  overflow: hidden;
+  color: #aebfca;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.texture-list span,
+.texture-list small {
+  margin-top: 3px;
+  color: #62727b;
+  font-size: 7px;
+}
+
+.texture-record {
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px;
+  border: 1px solid #456577;
+  border-radius: 7px;
+  background: #101922;
+  color: #a8d6e8;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.texture-record:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.texture-caveat {
+  margin: 8px 0 0;
+  color: #67737a;
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.texture-receipt {
+  margin-top: 10px;
+  padding: 9px;
+  border: 1px solid #2b3c47;
+  border-radius: 7px;
+  background: #0a1014;
+}
+
+.texture-receipt span,
+.texture-receipt strong,
+.texture-receipt small {
+  display: block;
+}
+
+.texture-receipt span {
+  color: #687b86;
+  font-size: 7px;
+  letter-spacing: 0.09em;
+}
+
+.texture-receipt strong {
+  margin-top: 4px;
+  color: #a9c2cf;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.texture-receipt small {
+  margin-top: 3px;
+  color: #667780;
+  font: 7px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.texture-receipt p {
+  margin: 5px 0 0;
+  overflow: hidden;
+  color: #74858f;
+  font: 7px ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
