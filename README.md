@@ -4,9 +4,9 @@
 
 > Neural systems may propose geometry. The workspace keeps editable state, provenance, and export authority.
 
-## Current state — v0.6 / Rung 6
+## Current state — v0.7 / Rung 7
 
-PhiForm now exposes its workspace and edit graph through a deterministic, capability-scoped agent command rail.
+PhiForm now includes a measurable production-geometry qualification and export path.
 
 ### Rung 1 — workbench foundation ✅
 React/TypeScript studio, Three.js viewport, adapter contract, proof generation, receipts.
@@ -24,67 +24,82 @@ Orbit/select/transform/material editing, mesh inspection, browser persistence, p
 Branchable history, committed snapshots, mesh targeting, recorded-only neural intent, edit receipts, and SHA-256 derived-export lineage.
 
 ### Rung 6 — governed agent command API ✅
-- `phiform.agent-command.v1`
-- `phiform.agent-receipt.v1`
-- operator-granted capability set
-- default grant is read-only
-- command-to-capability registry
-- optimistic preconditions for artifact / graph node / workspace revision
-- replay rejection by command ID
-- mesh inventory discovery
-- mesh target selection by stable ID
-- workspace transform commands
-- workspace material commands
-- graph commit / branch / checkout commands
-- neural intent recording
-- GLB export dispatch through the normal derived-artifact path
-- visible Agent Command Rail
-- browser SDK at `window.PhiFormAgent`
-- project format v3 persists agent audit receipts
-- automatic project v1/v2 migration
-- CI qualification for denied, stale, replayed, invalid-target, and valid commands
+Capability-scoped commands, stale-state protection, replay protection, mesh discovery, agent receipts, and `window.PhiFormAgent`.
 
-## Governing model
+### Rung 7 — production geometry path ✅
+- topology and attribute audit per mesh
+- invalid/non-finite vertex detection
+- degenerate triangle detection
+- open boundary-edge detection
+- non-manifold edge detection
+- normal and UV readiness checks
+- explicit pass / warning / fail qualification
+- conservative indexed-degenerate removal
+- vertex-normal recomputation
+- Meshopt-backed LOD generation through Three.js `SimplifyModifier`
+- preservation skips for skinned, morph-target, and multi-material meshes
+- production profiles for Archive GLB, Web Balanced, Godot Game, and Unreal Game
+- profile triangle budgets and LOD ratios
+- SHA-256 over every exported LOD GLB
+- `phiform.production-receipt.v1` manifest
+- project v4 persistence of production receipts
+- CI contract for geometry diagnostics and conservative repair
+
+## Production profiles
+
+| Profile | LOD ratios | LOD0 triangle budget | Conservative repair |
+| --- | --- | ---: | --- |
+| Archive GLB | 1.00 | preserve | off |
+| Web Balanced | 1.00 / 0.50 / 0.20 | 60,000 | on |
+| Godot Game | 1.00 / 0.50 / 0.25 | 80,000 | on |
+| Unreal Game | 1.00 / 0.50 / 0.25 | 120,000 | on |
+
+A profile is a reproducible PhiForm export policy, not a claim that every resulting mesh is automatically ideal for that engine.
+
+## Qualification semantics
 
 ```text
-agent proposal
-     |
-     v
-phiform.agent-command.v1
-     |
-     +--> command known?
-     +--> capability granted?
-     +--> command id unused?
-     +--> expected artifact/node/revision still current?
-     |
-     v
-deterministic command executor
-     |
-     +--> workspace mutation
-     +--> edit graph mutation
-     +--> recorded neural intent
-     +--> export effect dispatch
-     |
-     v
-phiform.agent-receipt.v1
+PASS
+  no audited defects for the selected profile
+
+WARNING
+  usable candidate with findings such as open boundaries,
+  degenerates, missing UVs/normals, or budget pressure
+
+FAIL
+  invalid vertex positions or non-manifold edges remain
 ```
 
-The agent API does not expose arbitrary DOM control, shell execution, or a generic "do anything" escape hatch.
+PhiForm does **not** claim that an open mesh is invalid. Open boundaries are reported because watertightness is not proven.
 
-## Browser agent API
+Non-manifold topology is currently reported as a failure because the production pipeline does not yet have a qualified manifold reconstruction algorithm.
 
-The studio installs:
+## Production pack
 
-```js
-window.PhiFormAgent.describe()
-window.PhiFormAgent.submit(command)
+A production build generates:
+
+```text
+<form>-<profile>-lod0.glb
+<form>-<profile>-lod1.glb
+<form>-<profile>-lod2.glb
+<form>-<profile>-production.json
 ```
 
-`describe()` returns the command catalog, currently granted capabilities, state fingerprint, and discoverable mesh targets.
+Profiles with one LOD generate only LOD0.
 
-`submit()` accepts a `phiform.agent-command.v1` envelope and returns a receipt.
+Every GLB receives a SHA-256 in the production receipt. The receipt also binds:
 
-See [docs/AGENT_API.md](docs/AGENT_API.md).
+- source artifact ID
+- source edit-graph node
+- selected profile
+- pre-export audit
+- post-export audit for every LOD
+- operations and skips
+- triangle counts
+- byte lengths
+- SHA-256 hashes
+
+See [docs/PRODUCTION.md](docs/PRODUCTION.md).
 
 ## Run
 
@@ -99,14 +114,13 @@ Local inference bridge:
 npm run bridge
 ```
 
-Stable Fast 3D setup is documented in [docs/SF3D.md](docs/SF3D.md).
-
 ## Qualification
 
 ```bash
 npm run contract
 npm run graph:contract
 npm run agent:contract
+npm run production:contract
 npm run check
 npm run build
 ```
@@ -116,12 +130,20 @@ npm run build
 New saves use:
 
 ```text
-phiform.project.v3
+phiform.project.v4
 ```
 
-Project v3 stores source state, generation provenance, the edit graph, embedded GLB bytes when needed, and the agent receipt audit trail.
+Project v4 preserves:
 
-Project v1 and v2 files remain importable. Migration never invents historical agent receipts that did not exist.
+- source artifact metadata
+- current workspace edit state
+- generation receipt
+- edit graph + edit receipts
+- agent audit receipts
+- production receipts
+- embedded source GLB bytes for portable projects
+
+Project v1, v2, and v3 files remain importable. Migration creates empty histories for capabilities that did not exist in the older schema rather than inventing evidence.
 
 ## Documentation
 
@@ -132,16 +154,11 @@ Project v1 and v2 files remain importable. Migration never invents historical ag
 - [Editable workspace](docs/WORKSPACE.md)
 - [Neural edit graph](docs/EDIT_GRAPH.md)
 - [Agent command API](docs/AGENT_API.md)
+- [Production geometry](docs/PRODUCTION.md)
 
-## Planned rungs
+## Next
 
-1. Workbench foundation ✅
-2. Local inference bridge ✅
-3. First neural backend / SF3D ✅
-4. Editable geometry workspace ✅
-5. Neural edit graph ✅
-6. Governed agent command API ✅
-7. **Production path**: retopo/LOD, texture pipeline, export qualification, game-engine packages.
+The next production layers can add qualified manifold repair, texture qualification/compression, richer engine manifests, collision generation, and eventually retopology backends.
 
 ## License
 
