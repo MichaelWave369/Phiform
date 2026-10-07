@@ -1,4 +1,5 @@
 import type {
+  BasisuDerivedReceipt,
   TextureAudit,
   TextureEncoderDescriptor,
   TextureEncodingReceipt,
@@ -15,10 +16,14 @@ interface TexturePanelProps {
   encoder?: TextureEncoderDescriptor
   encoderStatus: 'idle' | 'checking' | 'online' | 'error'
   encodingBusy: boolean
+  basisuBusy: boolean
+  basisuReceipts: readonly BasisuDerivedReceipt[]
+  basisuSessionReady: boolean
   onProfileChange: (profileId: TextureProfileId) => void
   onRecord: () => void
   onProbeEncoder: () => void
   onExecuteEncoding: () => void
+  onBuildBasisuGlb: () => void
 }
 
 function bytes(value: number): string {
@@ -35,14 +40,19 @@ export function TexturePanel({
   encoder,
   encoderStatus,
   encodingBusy,
+  basisuBusy,
+  basisuReceipts,
+  basisuSessionReady,
   onProfileChange,
   onRecord,
   onProbeEncoder,
   onExecuteEncoding,
+  onBuildBasisuGlb,
 }: TexturePanelProps) {
   const profile = TEXTURE_PROFILES[profileId]
   const latest = receipts.at(-1)
   const latestEncoding = encodingReceipts.at(-1)
+  const latestBasisu = basisuReceipts.at(-1)
   const canExecute =
     Boolean(audit) &&
     audit?.qualification !== 'fail' &&
@@ -159,9 +169,38 @@ export function TexturePanel({
         </div>
       </div>
 
+      <div className="basisu-derived">
+        <div className="basisu-derived-head">
+          <div>
+            <span>KHR_TEXTURE_BASISU GLB</span>
+            <strong>Fallback-bearing derived asset</strong>
+          </div>
+          <i>{basisuSessionReady ? 'BYTES READY' : 'RE-ENCODE NEEDED'}</i>
+        </div>
+
+        <button
+          disabled={
+            basisuBusy ||
+            !basisuSessionReady ||
+            !latestEncoding ||
+            latestEncoding.sourceArtifactId === ''
+          }
+          onClick={onBuildBasisuGlb}
+        >
+          {basisuBusy
+            ? 'BUILDING BASISU GLB…'
+            : 'BUILD KHR_TEXTURE_BASISU GLB'}
+        </button>
+
+        <p>
+          Original PNG/JPEG fallbacks stay embedded. Verified KTX2 images are
+          added as extension alternatives; the editable source asset is not mutated.
+        </p>
+      </div>
+
       <p className="texture-caveat">
-        Rung 10 only marks compression executed after Khronos KTX returns
-        valid KTX2 bytes and the browser independently verifies every SHA-256.
+        Rung 10 proves KTX2 bytes. Rung 11 can bind those bytes into a derived
+        GLB only while the verified payloads remain available in this browser session.
       </p>
 
       {latest && (
@@ -186,6 +225,21 @@ export function TexturePanel({
           </small>
           <p>
             ratio {latestEncoding.aggregateCompressionRatio.toFixed(2)}× · hashes browser-verified
+          </p>
+        </div>
+      )}
+
+      {latestBasisu && (
+        <div className="basisu-receipt">
+          <span>LATEST BASISU GLB</span>
+          <strong>
+            {latestBasisu.bindingCoverage} · {latestBasisu.boundTextureCount} bound
+          </strong>
+          <small>
+            {bytes(latestBasisu.sourceGlbByteLength)} → {bytes(latestBasisu.outputGlbByteLength)}
+          </small>
+          <p>
+            {latestBasisu.fallbackOnlyTextureCount} fallback-only · {latestBasisu.unboundExecutedTextureCount} unbound executed
           </p>
         </div>
       )}
