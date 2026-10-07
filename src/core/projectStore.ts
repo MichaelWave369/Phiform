@@ -190,6 +190,7 @@ function normalizeProject(project: AnyProject): PortableProject {
     agentReceipts: [],
     productionReceipts: [],
     enginePackReceipts: [],
+    textureReceipts: [],
     latestReceipt: project.latestReceipt,
     glbBase64: project.glbBase64,
   }
