@@ -783,7 +783,10 @@ export function App() {
             onProductionAuditChange={setProductionAudit}
             onExportComplete={(blob) => { void handleEditedExport(blob) }}
             onProductionComplete={(result) => { void handleProductionComplete(result) }}
-            onError={setError}
+            onError={(message) => {
+              setError(message)
+              setProductionBusy(false)
+            }}
           />
 
           <div className="stage-footer">
