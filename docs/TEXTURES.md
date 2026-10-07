@@ -173,3 +173,18 @@ Those require separate qualified operations.
 - UASTC planning for normal maps
 - ETC1S planning for color/scalar maps
 - receipt state remains `compressionExecuted: false`
+
+
+## Rung 10 execution handoff
+
+Rung 9's `compressionPlan` remains immutable evidence of intended work.
+
+Rung 10 creates a separate:
+
+```text
+phiform.texture-encode-receipt.v1
+```
+
+only after Khronos KTX Software produces real KTX2 bytes and the browser independently verifies their SHA-256.
+
+See [Executed KTX2 / Basis Encoding](KTX2_ENCODING.md).
