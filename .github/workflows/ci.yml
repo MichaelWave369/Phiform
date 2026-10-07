@@ -35,6 +35,9 @@ jobs:
       - name: Production geometry contract
         run: npm run production:contract
 
+      - name: Engine asset pack contract
+        run: npm run engine:contract
+
       - name: Typecheck
         run: npm run check
 
