@@ -42,6 +42,7 @@ import type {
   BasisuCompactReceipt,
   BasisuDerivedReceipt,
   DerivedArtifactLineage,
+  GltfValidationReceipt,
   EditTarget,
   EnginePackReceipt,
   EngineTarget,
@@ -94,6 +95,11 @@ import {
   rewriteGlbWithBasisu,
   type VerifiedKtx2Payload,
 } from './gltf/basisuGlb'
+import { GltfValidatorClient } from './gltf/validatorClient'
+import {
+  buildGltfValidationReceipt,
+  validateBasisuSemantics,
+} from './gltf/validation'
 
 interface SessionKtx2Payload {
   textureId: string
@@ -267,6 +273,8 @@ export function App() {
   const [basisuCompactBusy, setBasisuCompactBusy] = useState(false)
   const [basisuCompactReceipts, setBasisuCompactReceipts] =
     useState<BasisuCompactReceipt[]>([])
+  const [gltfValidationReceipts, setGltfValidationReceipts] =
+    useState<GltfValidationReceipt[]>([])
   const importRef = useRef<HTMLInputElement>(null)
   const agentStateRef = useRef<AgentWorkspaceState>({
     artifact: initialArtifact,
@@ -436,6 +444,7 @@ export function App() {
       setBasisuDerivedReceipts([])
       setSessionBasisuDerived(undefined)
       setBasisuCompactReceipts([])
+      setGltfValidationReceipts([])
       setTextureAudit(undefined)
       setProjectStatus('')
     } catch (cause) {
@@ -560,6 +569,7 @@ export function App() {
         textureEncodingReceipts,
         basisuDerivedReceipts,
         basisuCompactReceipts,
+        gltfValidationReceipts,
         latestReceipt,
       )
       setProjectStatus('SAVED LOCALLY')
@@ -584,6 +594,7 @@ export function App() {
     setTextureEncodingReceipts(project.textureEncodingReceipts)
     setBasisuDerivedReceipts(project.basisuDerivedReceipts)
     setBasisuCompactReceipts(project.basisuCompactReceipts)
+    setGltfValidationReceipts(project.gltfValidationReceipts)
     setSessionKtx2Payloads([])
     setSessionBasisuDerived(undefined)
     setProductionAudit(undefined)
@@ -620,10 +631,11 @@ export function App() {
         textureEncodingReceipts,
         basisuDerivedReceipts,
         basisuCompactReceipts,
+        gltfValidationReceipts,
         latestReceipt,
       )
       downloadPortableProject(project)
-      setProjectStatus('PROJECT V9 EXPORTED')
+      setProjectStatus('PROJECT V10 EXPORTED')
     } catch (cause) {
       setProjectStatus('')
       setError(cause instanceof Error ? cause.message : 'Project export failed.')
@@ -946,6 +958,53 @@ export function App() {
     }
   }
 
+  const validateDerivedGlb = async (
+    blob: Blob,
+    filename: string,
+    target: 'basisu-fallback' | 'basisu-compact',
+    targetReceiptId: string,
+  ): Promise<GltfValidationReceipt> => {
+    const sha256 = await sha256Blob(blob)
+    const response = await new GltfValidatorClient(endpoint).validate(
+      blob,
+      filename,
+      sha256,
+    )
+
+    if (
+      response.sha256 !== sha256 ||
+      response.byteLength !== blob.size
+    ) {
+      throw new Error(
+        'glTF validator response does not match the submitted GLB bytes.',
+      )
+    }
+
+    const bytes = new Uint8Array(await blob.arrayBuffer())
+    const basisu = validateBasisuSemantics(bytes, target)
+    const receipt = buildGltfValidationReceipt(
+      artifact,
+      editGraph.currentNodeId,
+      target,
+      targetReceiptId,
+      filename,
+      response,
+      basisu,
+    )
+
+    setGltfValidationReceipts((current) =>
+      [...current, receipt].slice(-100),
+    )
+    downloadBlob(
+      new Blob([JSON.stringify(receipt, null, 2)], {
+        type: 'application/json',
+      }),
+      `${safeName(filename)}-gltf-validation.json`,
+    )
+
+    return receipt
+  }
+
   const handleBasisuSourceGlbReady = async (sourceGlb: Blob) => {
     setError('')
     try {
@@ -1056,6 +1115,14 @@ export function App() {
         blob: outputBlob,
       })
 
+      setProjectStatus('VALIDATING BASISU GLB…')
+      const validationReceipt = await validateDerivedGlb(
+        outputBlob,
+        outputFilename,
+        'basisu-fallback',
+        receipt.id,
+      )
+
       downloadBlob(outputBlob, outputFilename)
       downloadBlob(
         new Blob([JSON.stringify(receipt, null, 2)], {
@@ -1066,8 +1133,8 @@ export function App() {
 
       setProjectStatus(
         `BASISU GLB ${receipt.bindingCoverage.toUpperCase()} · ` +
-        `${receipt.boundTextureCount} BOUND · ` +
-        `${receipt.fallbackOnlyTextureCount} FALLBACK-ONLY`,
+        `VALIDATION ${validationReceipt.qualification.toUpperCase()} · ` +
+        `${receipt.boundTextureCount} BOUND`,
       )
     } catch (cause) {
       setError(
@@ -1199,6 +1266,15 @@ export function App() {
       setBasisuCompactReceipts((current) =>
         [...current, receipt].slice(-50),
       )
+
+      setProjectStatus('VALIDATING COMPACT GLB…')
+      const validationReceipt = await validateDerivedGlb(
+        outputBlob,
+        outputFilename,
+        'basisu-compact',
+        receipt.id,
+      )
+
       downloadBlob(outputBlob, outputFilename)
       downloadBlob(
         new Blob([JSON.stringify(receipt, null, 2)], {
@@ -1208,7 +1284,7 @@ export function App() {
       )
 
       setProjectStatus(
-        `BASISU COMPACT · ${receipt.textureCount} TEXTURES · ` +
+        `BASISU COMPACT · VALIDATION ${validationReceipt.qualification.toUpperCase()} · ` +
         `${bytes(Math.max(receipt.byteSavings, 0))} SAVED`,
       )
     } catch (cause) {
@@ -1504,7 +1580,7 @@ export function App() {
         </div>
 
         <div className="top-status">
-          <span className="pill"><i /> RUNG 12</span>
+          <span className="pill"><i /> RUNG 13</span>
           <span className="pill muted">
             {editGraph.currentBranch} · {dirty ? 'WORKING TREE DIRTY' : 'COMMITTED'}
           </span>
@@ -1686,6 +1762,7 @@ export function App() {
             <div><span>KTX2 EXECUTED</span><strong>{textureEncodingReceipts.length}</strong></div>
             <div><span>BASISU GLBS</span><strong>{basisuDerivedReceipts.length}</strong></div>
             <div><span>COMPACT GLBS</span><strong>{basisuCompactReceipts.length}</strong></div>
+            <div><span>GLTF VALIDATIONS</span><strong>{gltfValidationReceipts.length}</strong></div>
           </div>
 
           <div className="editor-card">
@@ -1908,6 +1985,7 @@ export function App() {
             basisuBusy={basisuBusy}
             basisuReceipts={basisuDerivedReceipts}
             compactReceipts={basisuCompactReceipts}
+            validationReceipts={gltfValidationReceipts}
             compactBusy={basisuCompactBusy}
             compactSessionReady={
               basisuDerivedReceipts.at(-1)?.bindingCoverage === 'full' &&
@@ -1996,11 +2074,11 @@ export function App() {
           </div>
 
           <div className="authority-note">
-            <span>STRIPPED ≠ GUESSWORK</span>
+            <span>VALIDATED ≠ CERTIFIED</span>
             <p>
-              Rung 12 removes fallback images only from FULL-coverage BasisU assets,
-              marks the extension required, remaps references, and repacks only still-used
-              bufferViews into a new compact GLB.
+              Rung 13 binds the official Khronos validator report to exact GLB bytes and
+              supplements it with PhiForm BasisU checks. The receipt records what was tested;
+              it does not claim Khronos certification or full extension semantics upstream.
             </p>
           </div>
         </aside>
