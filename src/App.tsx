@@ -39,6 +39,7 @@ import {
 } from './core/projectStore'
 import { receiptChecksum, receiptText } from './core/receipt'
 import type {
+  BasisuCompactReceipt,
   BasisuDerivedReceipt,
   DerivedArtifactLineage,
   EditTarget,
@@ -88,6 +89,8 @@ import {
 import { TextureEncoderClient } from './texture/encoderClient'
 import type { PreparedTexturePng } from './texture/sourcePng'
 import {
+  compactBasisuGlb,
+  inspectCompactBasisuGlb,
   rewriteGlbWithBasisu,
   type VerifiedKtx2Payload,
 } from './gltf/basisuGlb'
@@ -96,6 +99,12 @@ interface SessionKtx2Payload {
   textureId: string
   textureName: string
   sha256: string
+  blob: Blob
+}
+
+interface SessionBasisuDerived {
+  receiptId: string
+  filename: string
   blob: Blob
 }
 
@@ -253,6 +262,11 @@ export function App() {
   const [basisuBusy, setBasisuBusy] = useState(false)
   const [basisuDerivedReceipts, setBasisuDerivedReceipts] =
     useState<BasisuDerivedReceipt[]>([])
+  const [sessionBasisuDerived, setSessionBasisuDerived] =
+    useState<SessionBasisuDerived | undefined>()
+  const [basisuCompactBusy, setBasisuCompactBusy] = useState(false)
+  const [basisuCompactReceipts, setBasisuCompactReceipts] =
+    useState<BasisuCompactReceipt[]>([])
   const importRef = useRef<HTMLInputElement>(null)
   const agentStateRef = useRef<AgentWorkspaceState>({
     artifact: initialArtifact,
@@ -420,6 +434,8 @@ export function App() {
       setTextureEncodingReceipts([])
       setSessionKtx2Payloads([])
       setBasisuDerivedReceipts([])
+      setSessionBasisuDerived(undefined)
+      setBasisuCompactReceipts([])
       setTextureAudit(undefined)
       setProjectStatus('')
     } catch (cause) {
@@ -543,6 +559,7 @@ export function App() {
         textureReceipts,
         textureEncodingReceipts,
         basisuDerivedReceipts,
+        basisuCompactReceipts,
         latestReceipt,
       )
       setProjectStatus('SAVED LOCALLY')
@@ -566,7 +583,9 @@ export function App() {
     setTextureReceipts(project.textureReceipts)
     setTextureEncodingReceipts(project.textureEncodingReceipts)
     setBasisuDerivedReceipts(project.basisuDerivedReceipts)
+    setBasisuCompactReceipts(project.basisuCompactReceipts)
     setSessionKtx2Payloads([])
+    setSessionBasisuDerived(undefined)
     setProductionAudit(undefined)
     setTextureAudit(undefined)
     setMeshTargets([])
@@ -600,10 +619,11 @@ export function App() {
         textureReceipts,
         textureEncodingReceipts,
         basisuDerivedReceipts,
+        basisuCompactReceipts,
         latestReceipt,
       )
       downloadPortableProject(project)
-      setProjectStatus('PROJECT V8 EXPORTED')
+      setProjectStatus('PROJECT V9 EXPORTED')
     } catch (cause) {
       setProjectStatus('')
       setError(cause instanceof Error ? cause.message : 'Project export failed.')
@@ -1030,6 +1050,11 @@ export function App() {
       setBasisuDerivedReceipts((current) =>
         [...current, receipt].slice(-50),
       )
+      setSessionBasisuDerived({
+        receiptId: receipt.id,
+        filename: outputFilename,
+        blob: outputBlob,
+      })
 
       downloadBlob(outputBlob, outputFilename)
       downloadBlob(
@@ -1053,6 +1078,148 @@ export function App() {
       setProjectStatus('')
     } finally {
       setBasisuBusy(false)
+    }
+  }
+
+  const compactLatestBasisuGlb = async () => {
+    setError('')
+    setBasisuCompactBusy(true)
+    try {
+      const sourceReceipt = basisuDerivedReceipts.at(-1)
+      if (!sourceReceipt) {
+        throw new Error(
+          'Build a fallback-bearing BasisU GLB before compacting it.',
+        )
+      }
+      if (sourceReceipt.bindingCoverage !== 'full') {
+        throw new Error(
+          'Compact BasisU output requires FULL Rung 11 binding coverage.',
+        )
+      }
+      if (
+        sourceReceipt.sourceArtifactId !== artifact.id ||
+        sourceReceipt.sourceNodeId !== editGraph.currentNodeId
+      ) {
+        throw new Error(
+          'The latest BasisU GLB belongs to a different artifact or graph node.',
+        )
+      }
+      if (
+        !sessionBasisuDerived ||
+        sessionBasisuDerived.receiptId !== sourceReceipt.id
+      ) {
+        throw new Error(
+          'The fallback-bearing GLB bytes are not available in this browser session. Rebuild the Rung 11 BasisU GLB first.',
+        )
+      }
+      if (
+        sessionBasisuDerived.blob.size !==
+        sourceReceipt.outputGlbByteLength
+      ) {
+        throw new Error(
+          'Session BasisU GLB byte length no longer matches its receipt.',
+        )
+      }
+
+      const sourceSha256 = await sha256Blob(sessionBasisuDerived.blob)
+      if (sourceSha256 !== sourceReceipt.outputGlbSha256) {
+        throw new Error(
+          'Session BasisU GLB SHA-256 no longer matches its receipt.',
+        )
+      }
+
+      setProjectStatus('COMPACTING BASISU GLB…')
+      const sourceBytes = new Uint8Array(
+        await sessionBasisuDerived.blob.arrayBuffer(),
+      )
+      const compacted = compactBasisuGlb(sourceBytes)
+      const inspection = inspectCompactBasisuGlb(compacted.bytes)
+
+      if (
+        !inspection.extensionUsed ||
+        !inspection.extensionRequired ||
+        inspection.texturesWithCoreSource !== 0 ||
+        inspection.texturesWithBasisuSource !==
+          inspection.textureCount
+      ) {
+        throw new Error(
+          'Compacted GLB failed required BasisU reference validation.',
+        )
+      }
+
+      const outputBuffer = Uint8Array.from(compacted.bytes).buffer
+      const outputBlob = new Blob(
+        [outputBuffer],
+        { type: 'model/gltf-binary' },
+      )
+      const outputSha256 = await sha256Blob(outputBlob)
+      const outputFilename =
+        `${safeName(artifact.label)}-basisu-compact.glb`
+      const byteSavings =
+        sessionBasisuDerived.blob.size - outputBlob.size
+
+      const receipt: BasisuCompactReceipt = {
+        schema: 'phiform.basisu-compact-receipt.v1',
+        id:
+          `basisu-compact-receipt-` +
+          (crypto.randomUUID?.() ?? Date.now().toString(36)),
+        createdAt: new Date().toISOString(),
+        sourceArtifactId: artifact.id,
+        sourceNodeId: editGraph.currentNodeId,
+        sourceBasisuDerivedReceiptId: sourceReceipt.id,
+        sourceFilename: sessionBasisuDerived.filename,
+        outputFilename,
+        sourceGlbSha256: sourceSha256,
+        sourceGlbByteLength: sessionBasisuDerived.blob.size,
+        outputGlbSha256: outputSha256,
+        outputGlbByteLength: outputBlob.size,
+        extensionUsed: 'KHR_texture_basisu',
+        extensionRequired: true,
+        textureCount: compacted.textureCount,
+        removedFallbackImageCount:
+          compacted.removedFallbackImageCount,
+        removedBufferViewCount:
+          compacted.removedBufferViewCount,
+        removedBinaryBytes:
+          compacted.removedBinaryBytes,
+        byteSavings,
+        byteSavingsRatio:
+          byteSavings /
+          Math.max(sessionBasisuDerived.blob.size, 1),
+        notes: [
+          'Compaction only executes from a FULL-coverage Rung 11 BasisU GLB.',
+          'Core texture.source fallbacks were removed and KHR_texture_basisu is required.',
+          'Fallback image objects were removed and all surviving image indices were remapped.',
+          'The BIN chunk was rebuilt from bufferViews still referenced after fallback removal.',
+          'Every surviving bufferView was copied on a 4-byte-aligned destination offset.',
+          'The editable PhiForm source artifact and fallback-bearing derived GLB remain unchanged.',
+        ],
+      }
+
+      setBasisuCompactReceipts((current) =>
+        [...current, receipt].slice(-50),
+      )
+      downloadBlob(outputBlob, outputFilename)
+      downloadBlob(
+        new Blob([JSON.stringify(receipt, null, 2)], {
+          type: 'application/json',
+        }),
+        `${safeName(artifact.label)}-basisu-compact-receipt.json`,
+      )
+
+      setProjectStatus(
+        `BASISU COMPACT · ${receipt.textureCount} TEXTURES · ` +
+        `${bytes(Math.max(receipt.byteSavings, 0))} SAVED`,
+      )
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'BasisU GLB compaction failed.',
+      )
+      setProjectStatus('')
+    } finally {
+      setBasisuCompactBusy(false)
     }
   }
 
@@ -1337,7 +1504,7 @@ export function App() {
         </div>
 
         <div className="top-status">
-          <span className="pill"><i /> RUNG 11</span>
+          <span className="pill"><i /> RUNG 12</span>
           <span className="pill muted">
             {editGraph.currentBranch} · {dirty ? 'WORKING TREE DIRTY' : 'COMMITTED'}
           </span>
@@ -1518,6 +1685,7 @@ export function App() {
             <div><span>TEXTURE RECEIPTS</span><strong>{textureReceipts.length}</strong></div>
             <div><span>KTX2 EXECUTED</span><strong>{textureEncodingReceipts.length}</strong></div>
             <div><span>BASISU GLBS</span><strong>{basisuDerivedReceipts.length}</strong></div>
+            <div><span>COMPACT GLBS</span><strong>{basisuCompactReceipts.length}</strong></div>
           </div>
 
           <div className="editor-card">
@@ -1739,6 +1907,13 @@ export function App() {
             encodingBusy={textureEncodingBusy}
             basisuBusy={basisuBusy}
             basisuReceipts={basisuDerivedReceipts}
+            compactReceipts={basisuCompactReceipts}
+            compactBusy={basisuCompactBusy}
+            compactSessionReady={
+              basisuDerivedReceipts.at(-1)?.bindingCoverage === 'full' &&
+              sessionBasisuDerived?.receiptId ===
+                basisuDerivedReceipts.at(-1)?.id
+            }
             basisuSessionReady={
               sessionKtx2Payloads.length > 0 &&
               sessionKtx2Payloads.length ===
@@ -1749,6 +1924,9 @@ export function App() {
             onProbeEncoder={() => { void probeTextureEncoder() }}
             onExecuteEncoding={() => { void beginTextureEncoding() }}
             onBuildBasisuGlb={beginBasisuDerivedGlb}
+            onCompactBasisuGlb={() => {
+              void compactLatestBasisuGlb()
+            }}
           />
 
           <EnginePackPanel
@@ -1818,11 +1996,11 @@ export function App() {
           </div>
 
           <div className="authority-note">
-            <span>DERIVED ≠ SOURCE MUTATION</span>
+            <span>STRIPPED ≠ GUESSWORK</span>
             <p>
-              Rung 11 embeds verified KTX2 payloads through KHR_texture_basisu into a
-              new fallback-bearing GLB. Original image sources and the editable workspace
-              remain untouched.
+              Rung 12 removes fallback images only from FULL-coverage BasisU assets,
+              marks the extension required, remaps references, and repacks only still-used
+              bufferViews into a new compact GLB.
             </p>
           </div>
         </aside>
