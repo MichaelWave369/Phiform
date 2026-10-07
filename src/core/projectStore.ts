@@ -225,6 +225,7 @@ function normalizeProject(project: AnyProject): PortableProject {
     productionReceipts: [],
     enginePackReceipts: [],
     textureReceipts: [],
+    textureEncodingReceipts: [],
     latestReceipt: project.latestReceipt,
     glbBase64: project.glbBase64,
   }
