@@ -559,7 +559,7 @@ export function App() {
 
       const lods = []
       for (const file of result.lodFiles) {
-        const path = \`models/lod\${file.lod}.glb\`
+        const path = `models/lod${file.lod}.glb`
         inputFiles.push({
           path,
           role: 'lod',
@@ -590,12 +590,12 @@ export function App() {
         ],
       })
 
-      const packageFilename = \`\${baseName}-\${result.engine}-engine-pack.zip\`
+      const packageFilename = `${baseName}-${result.engine}-engine-pack.zip`
       const packageSha256 = await sha256Bytes(built.zipBytes)
 
       const receipt: EnginePackReceipt = {
         schema: 'phiform.engine-pack-receipt.v1',
-        id: \`engine-pack-receipt-\${crypto.randomUUID?.() ?? Date.now().toString(36)}\`,
+        id: `engine-pack-receipt-${crypto.randomUUID?.() ?? Date.now().toString(36)}`,
         createdAt: new Date().toISOString(),
         engine: result.engine,
         sourceArtifactId: artifact.id,
@@ -618,11 +618,11 @@ export function App() {
         new Blob([JSON.stringify(receipt, null, 2)], {
           type: 'application/json',
         }),
-        \`\${baseName}-\${result.engine}-engine-pack-receipt.json\`,
+        `${baseName}-${result.engine}-engine-pack-receipt.json`,
       )
 
       setProjectStatus(
-        \`ENGINE PACK \${result.engine.toUpperCase()} · \${built.fileRecords.length} FILES\`,
+        `ENGINE PACK ${result.engine.toUpperCase()} · ${built.fileRecords.length} FILES`,
       )
     } catch (cause) {
       setError(
