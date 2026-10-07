@@ -4,6 +4,7 @@ import type {
   BasisuCompactReceipt,
   BasisuDerivedReceipt,
   GltfValidationReceipt,
+  ReleaseAttestation,
   ReleaseCandidateReceipt,
   EditGraph,
   EnginePackReceipt,
@@ -21,6 +22,7 @@ import type {
   PortableProjectV9,
   PortableProjectV10,
   PortableProjectV11,
+  PortableProjectV12,
   ProductionReceipt,
   TextureEncodingReceipt,
   TextureReceipt,
@@ -43,6 +45,7 @@ type AnyProject =
   | PortableProjectV9
   | PortableProjectV10
   | PortableProjectV11
+  | PortableProjectV12
 
 interface StoredProjectRecord {
   key: string
@@ -107,6 +110,25 @@ function manifestArtifact(artifact: ModelArtifact): ModelArtifact {
 }
 
 function normalizeProject(project: AnyProject): PortableProject {
+  if (project.schema === 'phiform.project.v12') {
+    if (project.editGraph?.schema !== 'phiform.edit-graph.v1') {
+      throw new Error('PhiForm project v12 is missing a valid edit graph.')
+    }
+    if (!Array.isArray(project.agentReceipts) ||
+        !Array.isArray(project.productionReceipts) ||
+        !Array.isArray(project.enginePackReceipts) ||
+        !Array.isArray(project.textureReceipts) ||
+        !Array.isArray(project.textureEncodingReceipts) ||
+        !Array.isArray(project.basisuDerivedReceipts) ||
+        !Array.isArray(project.basisuCompactReceipts) ||
+        !Array.isArray(project.gltfValidationReceipts) ||
+        !Array.isArray(project.releaseCandidateReceipts) ||
+        !Array.isArray(project.releaseAttestations)) {
+      throw new Error('PhiForm project v12 is missing one or more receipt arrays.')
+    }
+    return project
+  }
+
   if (project.schema === 'phiform.project.v11') {
     if (project.editGraph?.schema !== 'phiform.edit-graph.v1') {
       throw new Error('PhiForm project v11 is missing a valid edit graph.')
@@ -122,7 +144,25 @@ function normalizeProject(project: AnyProject): PortableProject {
         !Array.isArray(project.releaseCandidateReceipts)) {
       throw new Error('PhiForm project v11 is missing one or more receipt arrays.')
     }
-    return project
+    return {
+      schema: 'phiform.project.v12',
+      savedAt: project.savedAt,
+      artifact: project.artifact,
+      edits: project.edits,
+      editGraph: project.editGraph,
+      agentReceipts: project.agentReceipts,
+      productionReceipts: project.productionReceipts,
+      enginePackReceipts: project.enginePackReceipts,
+      textureReceipts: project.textureReceipts,
+      textureEncodingReceipts: project.textureEncodingReceipts,
+      basisuDerivedReceipts: project.basisuDerivedReceipts,
+      basisuCompactReceipts: project.basisuCompactReceipts,
+      gltfValidationReceipts: project.gltfValidationReceipts,
+      releaseCandidateReceipts: project.releaseCandidateReceipts,
+      releaseAttestations: [],
+      latestReceipt: project.latestReceipt,
+      glbBase64: project.glbBase64,
+    }
   }
 
   if (project.schema === 'phiform.project.v10') {
@@ -140,7 +180,7 @@ function normalizeProject(project: AnyProject): PortableProject {
       throw new Error('PhiForm project v10 is missing one or more receipt arrays.')
     }
     return {
-      schema: 'phiform.project.v11',
+      schema: 'phiform.project.v12',
       savedAt: project.savedAt,
       artifact: project.artifact,
       edits: project.edits,
@@ -154,6 +194,7 @@ function normalizeProject(project: AnyProject): PortableProject {
       basisuCompactReceipts: project.basisuCompactReceipts,
       gltfValidationReceipts: project.gltfValidationReceipts,
       releaseCandidateReceipts: [],
+      releaseAttestations: [],
       latestReceipt: project.latestReceipt,
       glbBase64: project.glbBase64,
     }
@@ -173,7 +214,7 @@ function normalizeProject(project: AnyProject): PortableProject {
       throw new Error('PhiForm project v9 is missing one or more receipt arrays.')
     }
     return {
-      schema: 'phiform.project.v11',
+      schema: 'phiform.project.v12',
       savedAt: project.savedAt,
       artifact: project.artifact,
       edits: project.edits,
@@ -187,6 +228,7 @@ function normalizeProject(project: AnyProject): PortableProject {
       basisuCompactReceipts: project.basisuCompactReceipts,
       gltfValidationReceipts: [],
       releaseCandidateReceipts: [],
+      releaseAttestations: [],
       latestReceipt: project.latestReceipt,
       glbBase64: project.glbBase64,
     }
@@ -205,7 +247,7 @@ function normalizeProject(project: AnyProject): PortableProject {
       throw new Error('PhiForm project v8 is missing one or more receipt arrays.')
     }
     return {
-      schema: 'phiform.project.v11',
+      schema: 'phiform.project.v12',
       savedAt: project.savedAt,
       artifact: project.artifact,
       edits: project.edits,
@@ -219,6 +261,7 @@ function normalizeProject(project: AnyProject): PortableProject {
       basisuCompactReceipts: [],
       gltfValidationReceipts: [],
       releaseCandidateReceipts: [],
+      releaseAttestations: [],
       latestReceipt: project.latestReceipt,
       glbBase64: project.glbBase64,
     }
@@ -236,7 +279,7 @@ function normalizeProject(project: AnyProject): PortableProject {
       throw new Error('PhiForm project v7 is missing one or more receipt arrays.')
     }
     return {
-      schema: 'phiform.project.v11',
+      schema: 'phiform.project.v12',
       savedAt: project.savedAt,
       artifact: project.artifact,
       edits: project.edits,
@@ -250,6 +293,7 @@ function normalizeProject(project: AnyProject): PortableProject {
       basisuCompactReceipts: [],
       gltfValidationReceipts: [],
       releaseCandidateReceipts: [],
+      releaseAttestations: [],
       latestReceipt: project.latestReceipt,
       glbBase64: project.glbBase64,
     }
@@ -266,7 +310,7 @@ function normalizeProject(project: AnyProject): PortableProject {
       throw new Error('PhiForm project v6 is missing one or more receipt arrays.')
     }
     return {
-      schema: 'phiform.project.v11',
+      schema: 'phiform.project.v12',
       savedAt: project.savedAt,
       artifact: project.artifact,
       edits: project.edits,
@@ -280,6 +324,7 @@ function normalizeProject(project: AnyProject): PortableProject {
       basisuCompactReceipts: [],
       gltfValidationReceipts: [],
       releaseCandidateReceipts: [],
+      releaseAttestations: [],
       latestReceipt: project.latestReceipt,
       glbBase64: project.glbBase64,
     }
@@ -299,7 +344,7 @@ function normalizeProject(project: AnyProject): PortableProject {
       throw new Error('PhiForm project v5 is missing its engine pack receipt array.')
     }
     return {
-      schema: 'phiform.project.v11',
+      schema: 'phiform.project.v12',
       savedAt: project.savedAt,
       artifact: project.artifact,
       edits: project.edits,
@@ -313,6 +358,7 @@ function normalizeProject(project: AnyProject): PortableProject {
       basisuCompactReceipts: [],
       gltfValidationReceipts: [],
       releaseCandidateReceipts: [],
+      releaseAttestations: [],
       latestReceipt: project.latestReceipt,
       glbBase64: project.glbBase64,
     }
@@ -320,7 +366,7 @@ function normalizeProject(project: AnyProject): PortableProject {
 
   if (project.schema === 'phiform.project.v4') {
     return {
-      schema: 'phiform.project.v11',
+      schema: 'phiform.project.v12',
       savedAt: project.savedAt,
       artifact: project.artifact,
       edits: project.edits,
@@ -334,6 +380,7 @@ function normalizeProject(project: AnyProject): PortableProject {
       basisuCompactReceipts: [],
       gltfValidationReceipts: [],
       releaseCandidateReceipts: [],
+      releaseAttestations: [],
       latestReceipt: project.latestReceipt,
       glbBase64: project.glbBase64,
     }
@@ -341,7 +388,7 @@ function normalizeProject(project: AnyProject): PortableProject {
 
   if (project.schema === 'phiform.project.v3') {
     return {
-      schema: 'phiform.project.v11',
+      schema: 'phiform.project.v12',
       savedAt: project.savedAt,
       artifact: project.artifact,
       edits: project.edits,
@@ -355,6 +402,7 @@ function normalizeProject(project: AnyProject): PortableProject {
       basisuCompactReceipts: [],
       gltfValidationReceipts: [],
       releaseCandidateReceipts: [],
+      releaseAttestations: [],
       latestReceipt: project.latestReceipt,
       glbBase64: project.glbBase64,
     }
@@ -362,7 +410,7 @@ function normalizeProject(project: AnyProject): PortableProject {
 
   if (project.schema === 'phiform.project.v2') {
     return {
-      schema: 'phiform.project.v11',
+      schema: 'phiform.project.v12',
       savedAt: project.savedAt,
       artifact: project.artifact,
       edits: project.edits,
@@ -376,13 +424,14 @@ function normalizeProject(project: AnyProject): PortableProject {
       basisuCompactReceipts: [],
       gltfValidationReceipts: [],
       releaseCandidateReceipts: [],
+      releaseAttestations: [],
       latestReceipt: project.latestReceipt,
       glbBase64: project.glbBase64,
     }
   }
 
   return {
-    schema: 'phiform.project.v11',
+    schema: 'phiform.project.v12',
     savedAt: project.savedAt,
     artifact: project.artifact,
     edits: project.edits,
@@ -432,11 +481,12 @@ export async function saveProjectToBrowser(
   basisuCompactReceipts: readonly BasisuCompactReceipt[],
   gltfValidationReceipts: readonly GltfValidationReceipt[],
   releaseCandidateReceipts: readonly ReleaseCandidateReceipt[],
+  releaseAttestations: readonly ReleaseAttestation[],
   latestReceipt?: GenerationReceipt,
 ): Promise<void> {
   const glb = await fetchGlb(artifact)
   const project: PortableProject = {
-    schema: 'phiform.project.v11',
+    schema: 'phiform.project.v12',
     savedAt: new Date().toISOString(),
     artifact: manifestArtifact(artifact),
     edits,
@@ -450,6 +500,7 @@ export async function saveProjectToBrowser(
     basisuCompactReceipts: [...basisuCompactReceipts],
     gltfValidationReceipts: [...gltfValidationReceipts],
     releaseCandidateReceipts: [...releaseCandidateReceipts],
+    releaseAttestations: [...releaseAttestations],
     latestReceipt,
   }
 
@@ -493,11 +544,12 @@ export async function createPortableProject(
   basisuCompactReceipts: readonly BasisuCompactReceipt[],
   gltfValidationReceipts: readonly GltfValidationReceipt[],
   releaseCandidateReceipts: readonly ReleaseCandidateReceipt[],
+  releaseAttestations: readonly ReleaseAttestation[],
   latestReceipt?: GenerationReceipt,
 ): Promise<PortableProject> {
   const glb = await fetchGlb(artifact)
   return {
-    schema: 'phiform.project.v11',
+    schema: 'phiform.project.v12',
     savedAt: new Date().toISOString(),
     artifact: manifestArtifact(artifact),
     edits,
@@ -511,6 +563,7 @@ export async function createPortableProject(
     basisuCompactReceipts: [...basisuCompactReceipts],
     gltfValidationReceipts: [...gltfValidationReceipts],
     releaseCandidateReceipts: [...releaseCandidateReceipts],
+    releaseAttestations: [...releaseAttestations],
     latestReceipt,
     glbBase64: glb ? arrayBufferToBase64(glb) : undefined,
   }
@@ -547,7 +600,8 @@ export async function readPortableProject(file: File): Promise<PortableProject> 
       parsed.schema !== 'phiform.project.v8' &&
       parsed.schema !== 'phiform.project.v9' &&
       parsed.schema !== 'phiform.project.v10' &&
-      parsed.schema !== 'phiform.project.v11') ||
+      parsed.schema !== 'phiform.project.v11' &&
+      parsed.schema !== 'phiform.project.v12') ||
     !parsed.artifact ||
     !parsed.edits
   ) {
