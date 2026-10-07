@@ -176,7 +176,7 @@ export interface PortableProjectV1 {
   glbBase64?: string
 }
 
-export type PortableProject = PortableProjectV11
+export type PortableProject = PortableProjectV12
 
 
 export interface AgentAuditFingerprint {
@@ -776,6 +776,68 @@ export interface PortableProjectV11 {
   basisuCompactReceipts: BasisuCompactReceipt[]
   gltfValidationReceipts: GltfValidationReceipt[]
   releaseCandidateReceipts: ReleaseCandidateReceipt[]
+  latestReceipt?: GenerationReceipt
+  glbBase64?: string
+}
+
+
+export interface ReleaseSignerDescriptor {
+  schema: 'phiform.release-signer.v1'
+  id: 'operator.ed25519.v1'
+  label: string
+  available: boolean
+  algorithm: 'Ed25519'
+  publicKeyFingerprintSha256?: string
+  statusReason?: string
+}
+
+export interface ReleaseAttestationStatement {
+  schema: 'phiform.release-attestation-statement.v1'
+  releaseId: string
+  releaseReceiptId: string
+  packageFilename: string
+  packageSha256: string
+  packageByteLength: number
+  sourceArtifactId: string
+  sourceNodeId: string
+  target: ReleaseTarget
+  targetReceiptId: string
+  validationReceiptId: string
+  policyId: ReleasePolicyId
+}
+
+export interface ReleaseAttestation {
+  schema: 'phiform.release-attestation.v1'
+  id: string
+  createdAt: string
+  algorithm: 'Ed25519'
+  signerId: 'operator.ed25519.v1'
+  publicKeyFingerprintSha256: string
+  publicKeyPem: string
+  signedPayloadBase64: string
+  signedPayloadSha256: string
+  signatureBase64: string
+  signatureVerified: true
+  statement: ReleaseAttestationStatement
+  notes: string[]
+}
+
+export interface PortableProjectV12 {
+  schema: 'phiform.project.v12'
+  savedAt: string
+  artifact: ModelArtifact
+  edits: WorkspaceEditState
+  editGraph: EditGraph
+  agentReceipts: AgentAuditReceipt[]
+  productionReceipts: ProductionReceipt[]
+  enginePackReceipts: EnginePackReceipt[]
+  textureReceipts: TextureReceipt[]
+  textureEncodingReceipts: TextureEncodingReceipt[]
+  basisuDerivedReceipts: BasisuDerivedReceipt[]
+  basisuCompactReceipts: BasisuCompactReceipt[]
+  gltfValidationReceipts: GltfValidationReceipt[]
+  releaseCandidateReceipts: ReleaseCandidateReceipt[]
+  releaseAttestations: ReleaseAttestation[]
   latestReceipt?: GenerationReceipt
   glbBase64?: string
 }
