@@ -10,8 +10,15 @@ import {
 } from '../production/geometry'
 import { productionProfile } from '../production/profiles'
 import type { ProductionRuntimeResult } from '../production/runtime'
+import {
+  buildEngineImportScene,
+  disposeEngineScene,
+  engineProfileId,
+} from '../engine/pack'
+import type { EngineRuntimeResult } from '../engine/runtime'
 import type {
   EditTarget,
+  EngineTarget,
   MeshStats,
   MeshTarget,
   ModelArtifact,
@@ -168,6 +175,8 @@ interface ViewportProps {
   exportRequest: number
   productionProfileId: ProductionProfileId
   productionRequest: number
+  engineTarget: EngineTarget
+  engineRequest: number
   onSelectedChange: (selected: boolean) => void
   onTargetChange: (target: EditTarget) => void
   onMeshTargetsChange: (targets: MeshTarget[]) => void
@@ -176,6 +185,7 @@ interface ViewportProps {
   onProductionAuditChange: (audit: ProductionAudit) => void
   onExportComplete: (blob: Blob) => void
   onProductionComplete: (result: ProductionRuntimeResult) => void
+  onEngineComplete: (result: EngineRuntimeResult) => void
   onError: (message: string) => void
 }
 
@@ -188,6 +198,8 @@ export function Viewport({
   exportRequest,
   productionProfileId,
   productionRequest,
+  engineTarget,
+  engineRequest,
   onSelectedChange,
   onTargetChange,
   onMeshTargetsChange,
@@ -196,6 +208,7 @@ export function Viewport({
   onProductionAuditChange,
   onExportComplete,
   onProductionComplete,
+  onEngineComplete,
   onError,
 }: ViewportProps) {
   const hostRef = useRef<HTMLDivElement>(null)
@@ -208,6 +221,7 @@ export function Viewport({
   const editsRef = useRef(edits)
   const exportSeenRef = useRef(0)
   const productionSeenRef = useRef(0)
+  const engineSeenRef = useRef(0)
   const [loadState, setLoadState] = useState<'ready' | 'loading' | 'error'>('ready')
 
   useEffect(() => {
@@ -553,6 +567,88 @@ export function Viewport({
         )
       })
   }, [productionRequest])
+
+  useEffect(() => {
+    if (engineRequest <= 0 || engineRequest === engineSeenRef.current) return
+    engineSeenRef.current = engineRequest
+
+    const object = objectRef.current
+    if (!object) {
+      onError('Nothing is loaded for engine pack export.')
+      return
+    }
+
+    const profileId = engineProfileId(engineTarget)
+    const profile = productionProfile(profileId)
+    const exporter = new GLTFExporter()
+
+    prepareProductionVariants(object, profile)
+      .then(async (prepared) => {
+        const lodFiles: EngineRuntimeResult['lodFiles'] = []
+
+        for (const variant of prepared.variants) {
+          const result = await exporter.parseAsync(variant.object, {
+            binary: true,
+            onlyVisible: true,
+            trs: true,
+          })
+          if (!(result instanceof ArrayBuffer)) {
+            throw new Error('Engine LOD exporter returned JSON instead of binary GLB.')
+          }
+          lodFiles.push({
+            lod: variant.lod,
+            ratio: variant.ratio,
+            triangles: variant.audit.totals.triangles,
+            blob: new Blob([result], { type: 'model/gltf-binary' }),
+          })
+        }
+
+        const lod0 = prepared.variants[0]
+        if (!lod0) {
+          throw new Error('Engine pack did not produce a LOD0 candidate.')
+        }
+
+        const importScene = buildEngineImportScene(
+          lod0.object,
+          engineTarget,
+          artifact.label,
+        )
+
+        try {
+          const importResult = await exporter.parseAsync(importScene.scene, {
+            binary: true,
+            onlyVisible: true,
+            trs: true,
+          })
+          if (!(importResult instanceof ArrayBuffer)) {
+            throw new Error('Engine import-scene exporter returned JSON instead of binary GLB.')
+          }
+
+          onEngineComplete({
+            engine: engineTarget,
+            productionProfileId: profileId,
+            collisionNodeNames: importScene.collisionNames,
+            importSceneBlob: new Blob(
+              [importResult],
+              { type: 'model/gltf-binary' },
+            ),
+            lodFiles,
+          })
+        } finally {
+          disposeEngineScene(importScene.scene)
+          for (const variant of prepared.variants) {
+            disposeObject(variant.object)
+          }
+        }
+      })
+      .catch((cause) => {
+        onError(
+          cause instanceof Error
+            ? cause.message
+            : 'Engine pack export failed.',
+        )
+      })
+  }, [engineRequest])
 
   useEffect(() => {
     if (exportRequest <= 0 || exportRequest === exportSeenRef.current) return
