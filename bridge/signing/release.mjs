@@ -203,6 +203,19 @@ export function verifyReleaseAttestation(attestation) {
   const payloadSha256 = createHash('sha256').update(payload).digest('hex')
   if (payloadSha256 !== attestation.signedPayloadSha256) return false
 
+  let decodedStatement
+  try {
+    decodedStatement = JSON.parse(payload.toString('utf8'))
+  } catch {
+    return false
+  }
+  if (
+    JSON.stringify(decodedStatement) !==
+    JSON.stringify(attestation.statement)
+  ) {
+    return false
+  }
+
   const fingerprint = publicFingerprint(publicKey)
   if (fingerprint !== attestation.publicKeyFingerprintSha256) return false
 
