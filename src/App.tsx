@@ -55,8 +55,10 @@ import type {
   ProductionAudit,
   ProductionProfileId,
   ProductionReceipt,
+  ReleaseAttestation,
   ReleaseCandidateReceipt,
   ReleasePolicyId,
+  ReleaseSignerDescriptor,
   ReleaseTarget,
   TextureAudit,
   TextureEncoderCodec,
@@ -105,6 +107,7 @@ import {
   validateBasisuSemantics,
 } from './gltf/validation'
 import { buildReleaseCandidate } from './release/pack'
+import { ReleaseSignerClient } from './release/signerClient'
 
 interface SessionKtx2Payload {
   textureId: string
@@ -120,6 +123,12 @@ interface SessionBasisuDerived {
 }
 
 interface SessionBasisuCompact {
+  receiptId: string
+  filename: string
+  blob: Blob
+}
+
+interface SessionReleaseCandidate {
   receiptId: string
   filename: string
   blob: Blob
@@ -295,6 +304,16 @@ export function App() {
   const [releaseBusy, setReleaseBusy] = useState(false)
   const [releaseCandidateReceipts, setReleaseCandidateReceipts] =
     useState<ReleaseCandidateReceipt[]>([])
+  const [sessionReleaseCandidate, setSessionReleaseCandidate] =
+    useState<SessionReleaseCandidate | undefined>()
+  const [releaseSigner, setReleaseSigner] =
+    useState<ReleaseSignerDescriptor | undefined>()
+  const [releaseSignerStatus, setReleaseSignerStatus] =
+    useState<'idle' | 'checking' | 'online' | 'error'>('idle')
+  const [releaseSigningToken, setReleaseSigningToken] = useState('')
+  const [releaseAttestBusy, setReleaseAttestBusy] = useState(false)
+  const [releaseAttestations, setReleaseAttestations] =
+    useState<ReleaseAttestation[]>([])
   const importRef = useRef<HTMLInputElement>(null)
   const agentStateRef = useRef<AgentWorkspaceState>({
     artifact: initialArtifact,
@@ -467,6 +486,8 @@ export function App() {
       setGltfValidationReceipts([])
       setSessionBasisuCompact(undefined)
       setReleaseCandidateReceipts([])
+      setSessionReleaseCandidate(undefined)
+      setReleaseAttestations([])
       setTextureAudit(undefined)
       setProjectStatus('')
     } catch (cause) {
@@ -593,6 +614,7 @@ export function App() {
         basisuCompactReceipts,
         gltfValidationReceipts,
         releaseCandidateReceipts,
+        releaseAttestations,
         latestReceipt,
       )
       setProjectStatus('SAVED LOCALLY')
@@ -619,9 +641,11 @@ export function App() {
     setBasisuCompactReceipts(project.basisuCompactReceipts)
     setGltfValidationReceipts(project.gltfValidationReceipts)
     setReleaseCandidateReceipts(project.releaseCandidateReceipts)
+    setReleaseAttestations(project.releaseAttestations)
     setSessionKtx2Payloads([])
     setSessionBasisuDerived(undefined)
     setSessionBasisuCompact(undefined)
+    setSessionReleaseCandidate(undefined)
     setProductionAudit(undefined)
     setTextureAudit(undefined)
     setMeshTargets([])
@@ -658,10 +682,11 @@ export function App() {
         basisuCompactReceipts,
         gltfValidationReceipts,
         releaseCandidateReceipts,
+        releaseAttestations,
         latestReceipt,
       )
       downloadPortableProject(project)
-      setProjectStatus('PROJECT V11 EXPORTED')
+      setProjectStatus('PROJECT V12 EXPORTED')
     } catch (cause) {
       setProjectStatus('')
       setError(cause instanceof Error ? cause.message : 'Project export failed.')
@@ -1396,10 +1421,18 @@ export function App() {
         [...current, built.receipt].slice(-100),
       )
 
+      const releaseBlob = new Blob(
+        [Uint8Array.from(built.zipBytes).buffer],
+        { type: 'application/zip' },
+      )
+      setSessionReleaseCandidate({
+        receiptId: built.receipt.id,
+        filename: built.receipt.packageFilename,
+        blob: releaseBlob,
+      })
+
       downloadBlob(
-        new Blob([Uint8Array.from(built.zipBytes).buffer], {
-          type: 'application/zip',
-        }),
+        releaseBlob,
         built.receipt.packageFilename,
       )
       downloadBlob(
@@ -1423,6 +1456,132 @@ export function App() {
       )
     } finally {
       setReleaseBusy(false)
+    }
+  }
+
+  const probeReleaseSigner = async () => {
+    setReleaseSignerStatus('checking')
+    setError('')
+    try {
+      const descriptor =
+        await new ReleaseSignerClient(endpoint).descriptor()
+      setReleaseSigner(descriptor)
+      setReleaseSignerStatus(
+        descriptor.available ? 'online' : 'error',
+      )
+      if (!descriptor.available) {
+        setError(
+          descriptor.statusReason ||
+          'Release signer is unavailable on the local bridge.',
+        )
+      }
+    } catch (cause) {
+      setReleaseSigner(undefined)
+      setReleaseSignerStatus('error')
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Release signer probe failed.',
+      )
+    }
+  }
+
+  const attestLatestRelease = async () => {
+    setError('')
+    setReleaseAttestBusy(true)
+    try {
+      const receipt = releaseCandidateReceipts.at(-1)
+      if (!receipt) {
+        throw new Error(
+          'Build a governed release candidate before attesting it.',
+        )
+      }
+      if (
+        !sessionReleaseCandidate ||
+        sessionReleaseCandidate.receiptId !== receipt.id
+      ) {
+        throw new Error(
+          'The exact release ZIP bytes are not available in this browser session.',
+        )
+      }
+
+      const client = new ReleaseSignerClient(endpoint)
+      const descriptor = await client.descriptor()
+      setReleaseSigner(descriptor)
+      setReleaseSignerStatus(
+        descriptor.available ? 'online' : 'error',
+      )
+      if (!descriptor.available) {
+        throw new Error(
+          descriptor.statusReason ||
+          'Release signer is unavailable on the local bridge.',
+        )
+      }
+
+      setProjectStatus('SIGNING RELEASE ATTESTATION…')
+      const attestation = await client.attest(
+        sessionReleaseCandidate.blob,
+        receipt,
+        releaseSigningToken,
+      )
+
+      if (
+        attestation.signatureVerified !== true ||
+        attestation.statement.releaseReceiptId !== receipt.id ||
+        attestation.statement.packageSha256 !==
+          receipt.packageSha256 ||
+        attestation.statement.packageByteLength !==
+          receipt.packageByteLength ||
+        attestation.statement.sourceArtifactId !==
+          receipt.sourceArtifactId ||
+        attestation.statement.sourceNodeId !==
+          receipt.sourceNodeId ||
+        attestation.statement.targetReceiptId !==
+          receipt.targetReceiptId ||
+        attestation.statement.validationReceiptId !==
+          receipt.validationReceiptId ||
+        attestation.statement.policyId !== receipt.policyId
+      ) {
+        throw new Error(
+          'Release attestation statement does not match the release receipt.',
+        )
+      }
+
+      if (
+        descriptor.publicKeyFingerprintSha256 &&
+        descriptor.publicKeyFingerprintSha256 !==
+          attestation.publicKeyFingerprintSha256
+      ) {
+        throw new Error(
+          'Release attestation signer fingerprint changed during the signing transaction.',
+        )
+      }
+
+      setReleaseAttestations((current) =>
+        [...current, attestation].slice(-100),
+      )
+
+      downloadBlob(
+        new Blob([JSON.stringify(attestation, null, 2)], {
+          type: 'application/json',
+        }),
+        `${safeName(artifact.label)}-release-attestation.json`,
+      )
+
+      setProjectStatus(
+        `ATTESTED · ED25519 · ` +
+        attestation.publicKeyFingerprintSha256.slice(0, 16) +
+        '…',
+      )
+    } catch (cause) {
+      setProjectStatus('')
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Release attestation failed.',
+      )
+    } finally {
+      setReleaseAttestBusy(false)
     }
   }
 
@@ -1707,7 +1866,7 @@ export function App() {
         </div>
 
         <div className="top-status">
-          <span className="pill"><i /> RUNG 14</span>
+          <span className="pill"><i /> RUNG 15</span>
           <span className="pill muted">
             {editGraph.currentBranch} · {dirty ? 'WORKING TREE DIRTY' : 'COMMITTED'}
           </span>
@@ -2142,6 +2301,16 @@ export function App() {
             compactReceipt={basisuCompactReceipts.at(-1)}
             validationReceipts={gltfValidationReceipts}
             releaseReceipts={releaseCandidateReceipts}
+            signer={releaseSigner}
+            signerStatus={releaseSignerStatus}
+            signingToken={releaseSigningToken}
+            attestationBusy={releaseAttestBusy}
+            attestations={releaseAttestations}
+            releaseSessionReady={
+              Boolean(sessionReleaseCandidate) &&
+              sessionReleaseCandidate?.receiptId ===
+                releaseCandidateReceipts.at(-1)?.id
+            }
             fallbackSessionReady={
               Boolean(sessionBasisuDerived) &&
               sessionBasisuDerived?.receiptId ===
@@ -2156,6 +2325,13 @@ export function App() {
             onPolicyChange={setReleasePolicyId}
             onBuild={() => {
               void buildGovernedReleaseCandidate()
+            }}
+            onSigningTokenChange={setReleaseSigningToken}
+            onProbeSigner={() => {
+              void probeReleaseSigner()
+            }}
+            onAttest={() => {
+              void attestLatestRelease()
             }}
           />
 
@@ -2226,11 +2402,11 @@ export function App() {
           </div>
 
           <div className="authority-note">
-            <span>FINAL ≠ UNGOVERNED</span>
+            <span>HASH ≠ AUTHORIZATION</span>
             <p>
-              Rung 14 emits a release candidate only when the exact derived GLB bytes,
-              derived-artifact receipt, validation receipt, current artifact/node, and selected
-              policy all agree. FAIL never ships; WARNING ships only under explicit warning policy.
+              Rung 15 can bind a governed release ZIP to an operator-controlled Ed25519
+              key. The private key remains on localhost; the project stores only public
+              attestation evidence and never persists the signing token.
             </p>
           </div>
         </aside>
