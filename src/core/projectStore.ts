@@ -395,6 +395,7 @@ function normalizeProject(project: AnyProject): PortableProject {
     basisuDerivedReceipts: [],
     basisuCompactReceipts: [],
     gltfValidationReceipts: [],
+    releaseCandidateReceipts: [],
     latestReceipt: project.latestReceipt,
     glbBase64: project.glbBase64,
   }
