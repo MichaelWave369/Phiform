@@ -71,7 +71,7 @@ try {
   const health = await waitForHealth()
   assert.equal(health.schema, 'phiform.bridge.health.v1')
   assert.equal(health.status, 'ok')
-  assert.equal(health.bridgeVersion, '0.3.0')
+  assert.equal(health.bridgeVersion, '0.4.0')
 
   const backendResponse = await fetch(`${base}/v1/backends`)
   assert.equal(backendResponse.status, 200)
