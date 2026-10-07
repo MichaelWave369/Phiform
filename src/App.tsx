@@ -70,6 +70,7 @@ import {
   buildEnginePack,
   engineImportInstructions,
   sha256Bytes,
+  type EnginePackInputFile,
 } from './engine/pack'
 import type { EngineRuntimeResult } from './engine/runtime'
 
@@ -542,7 +543,7 @@ export function App() {
           ? 'import/asset-godot.glb'
           : 'import/asset-unreal.glb'
 
-      const inputFiles = [
+      const inputFiles: EnginePackInputFile[] = [
         {
           path: importScenePath,
           role: 'import-scene' as const,
