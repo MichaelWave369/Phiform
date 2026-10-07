@@ -4,9 +4,9 @@
 
 > Neural systems may propose geometry. The workspace keeps editable state, provenance, and export authority.
 
-## Current state — v0.7 / Rung 7
+## Current state — v0.8 / Rung 8
 
-PhiForm now includes a measurable production-geometry qualification and export path.
+PhiForm now packages qualified production geometry into governed Godot- and Unreal-oriented asset bundles.
 
 ### Rung 1 — workbench foundation ✅
 React/TypeScript studio, Three.js viewport, adapter contract, proof generation, receipts.
@@ -27,79 +27,111 @@ Branchable history, committed snapshots, mesh targeting, recorded-only neural in
 Capability-scoped commands, stale-state protection, replay protection, mesh discovery, agent receipts, and `window.PhiFormAgent`.
 
 ### Rung 7 — production geometry path ✅
-- topology and attribute audit per mesh
-- invalid/non-finite vertex detection
-- degenerate triangle detection
-- open boundary-edge detection
-- non-manifold edge detection
-- normal and UV readiness checks
-- explicit pass / warning / fail qualification
-- conservative indexed-degenerate removal
-- vertex-normal recomputation
-- Meshopt-backed LOD generation through Three.js `SimplifyModifier`
-- preservation skips for skinned, morph-target, and multi-material meshes
-- production profiles for Archive GLB, Web Balanced, Godot Game, and Unreal Game
-- profile triangle budgets and LOD ratios
-- SHA-256 over every exported LOD GLB
-- `phiform.production-receipt.v1` manifest
-- project v4 persistence of production receipts
-- CI contract for geometry diagnostics and conservative repair
+Topology/attribute audit, conservative repair, Meshopt-backed LOD generation, production profiles, SHA-256 production receipts.
 
-## Production profiles
+### Rung 8 — engine asset packs ✅
+- Godot-oriented ZIP pack
+- Unreal-oriented ZIP pack
+- combined engine import GLB
+- per-render-mesh box collision proxies
+- Godot `-convcolonly` collision naming
+- Unreal `UBX_<RenderMeshName>_00` collision naming
+- Godot Game / Unreal Game production LOD policy reuse
+- separate LOD GLBs under `models/`
+- target-specific `IMPORT.md`
+- `phiform.engine-pack.v1` manifest
+- glTF coordinate/unit declaration
+- SHA-256 for every packaged file
+- SHA-256 for the final ZIP bytes
+- `phiform.engine-pack-receipt.v1`
+- deterministic package file ordering and fixed ZIP timestamps
+- project v5 persistence of engine-pack receipts
+- CI qualification for collision naming, package structure, embedded manifest, and deterministic ZIP output
 
-| Profile | LOD ratios | LOD0 triangle budget | Conservative repair |
-| --- | --- | ---: | --- |
-| Archive GLB | 1.00 | preserve | off |
-| Web Balanced | 1.00 / 0.50 / 0.20 | 60,000 | on |
-| Godot Game | 1.00 / 0.50 / 0.25 | 80,000 | on |
-| Unreal Game | 1.00 / 0.50 / 0.25 | 120,000 | on |
+## Engine pack structure
 
-A profile is a reproducible PhiForm export policy, not a claim that every resulting mesh is automatically ideal for that engine.
-
-## Qualification semantics
+A typical pack looks like:
 
 ```text
-PASS
-  no audited defects for the selected profile
-
-WARNING
-  usable candidate with findings such as open boundaries,
-  degenerates, missing UVs/normals, or budget pressure
-
-FAIL
-  invalid vertex positions or non-manifold edges remain
+my-asset-godot-engine-pack.zip
+├── IMPORT.md
+├── import/
+│   └── asset-godot.glb
+├── models/
+│   ├── lod0.glb
+│   ├── lod1.glb
+│   └── lod2.glb
+└── phiform-engine-manifest.json
 ```
 
-PhiForm does **not** claim that an open mesh is invalid. Open boundaries are reported because watertightness is not proven.
+The Unreal pack uses `import/asset-unreal.glb`.
 
-Non-manifold topology is currently reported as a failure because the production pipeline does not yet have a qualified manifold reconstruction algorithm.
+The combined import scene contains:
 
-## Production pack
+- the production LOD0 visual geometry
+- one simple box collision proxy per render mesh
+- target-engine collision names
 
-A production build generates:
+The separate LOD files are included and fully hashed, but PhiForm does **not** claim the target engine will automatically associate them without engine-side import configuration.
+
+## Collision conventions
+
+### Godot
+
+Collision proxy meshes are named:
 
 ```text
-<form>-<profile>-lod0.glb
-<form>-<profile>-lod1.glb
-<form>-<profile>-lod2.glb
-<form>-<profile>-production.json
+<RenderMeshName>-convcolonly
 ```
 
-Profiles with one LOD generate only LOD0.
+This is designed for Godot's scene-import name-suffix workflow.
 
-Every GLB receives a SHA-256 in the production receipt. The receipt also binds:
+### Unreal Engine
 
+Collision proxy meshes are named:
+
+```text
+UBX_<RenderMeshName>_00
+```
+
+This is designed for Unreal's collision-by-mesh-name import workflow.
+
+Rung 8 uses **box proxies only**. It does not claim convex decomposition, per-poly collision optimization, or semantic collision authoring.
+
+## Coordinates
+
+The manifest explicitly records the glTF 2.0 source convention:
+
+```text
+handedness: right
+up: +Y
+forward: +Z
+linear unit: meter
+```
+
+Target engines remain responsible for their import-space conversion.
+
+## Package receipt
+
+Each build emits an external receipt:
+
+```text
+phiform.engine-pack-receipt.v1
+```
+
+It binds:
+
+- target engine
 - source artifact ID
-- source edit-graph node
-- selected profile
-- pre-export audit
-- post-export audit for every LOD
-- operations and skips
-- triangle counts
-- byte lengths
-- SHA-256 hashes
+- exact source edit-graph node
+- production profile
+- collision node names
+- LOD paths and triangle counts
+- every packaged file's byte length + SHA-256
+- package filename
+- final ZIP byte length + SHA-256
 
-See [docs/PRODUCTION.md](docs/PRODUCTION.md).
+The receipt is stored in the PhiForm project and downloaded beside the ZIP.
 
 ## Run
 
@@ -121,6 +153,7 @@ npm run contract
 npm run graph:contract
 npm run agent:contract
 npm run production:contract
+npm run engine:contract
 npm run check
 npm run build
 ```
@@ -130,20 +163,12 @@ npm run build
 New saves use:
 
 ```text
-phiform.project.v4
+phiform.project.v5
 ```
 
-Project v4 preserves:
+Project v5 preserves generation evidence, workspace state, edit lineage, agent receipts, production receipts, engine-pack receipts, and embedded source GLB bytes.
 
-- source artifact metadata
-- current workspace edit state
-- generation receipt
-- edit graph + edit receipts
-- agent audit receipts
-- production receipts
-- embedded source GLB bytes for portable projects
-
-Project v1, v2, and v3 files remain importable. Migration creates empty histories for capabilities that did not exist in the older schema rather than inventing evidence.
+Project v1 through v4 remain importable. Migration never invents history for capabilities that did not exist yet.
 
 ## Documentation
 
@@ -155,10 +180,11 @@ Project v1, v2, and v3 files remain importable. Migration creates empty historie
 - [Neural edit graph](docs/EDIT_GRAPH.md)
 - [Agent command API](docs/AGENT_API.md)
 - [Production geometry](docs/PRODUCTION.md)
+- [Engine asset packs](docs/ENGINE_PACKS.md)
 
 ## Next
 
-The next production layers can add qualified manifold repair, texture qualification/compression, richer engine manifests, collision generation, and eventually retopology backends.
+Likely next production rungs are texture qualification/compression, qualified manifold repair, better collision proxies, and semantic retopology.
 
 ## License
 
