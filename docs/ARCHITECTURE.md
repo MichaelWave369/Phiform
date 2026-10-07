@@ -356,3 +356,46 @@ phiform.basisu-derived-receipt.v1
 ```
 
 Hashes establish identity but do not substitute for binary payloads. For that reason, persisted Rung 10 receipts alone cannot authorize a Rung 11 rewrite after reload; verified KTX2 bytes must be available again.
+
+
+## Rung 12 — compact required-BasisU boundary
+
+Compaction consumes a full-coverage Rung 11 derived GLB, not the editable workspace.
+
+```text
+FULL fallback-bearing BasisU GLB
+      |
+      +-- receipt hash/length verification
+      |
+      v
+remove core texture.source
+      |
+      +-- remove fallback image objects
+      +-- remap KTX2 image indices
+      +-- require KHR_texture_basisu
+      |
+      v
+reference reachability scan
+      |
+      +-- collect surviving bufferViews
+      +-- remove unreachable fallback views
+      +-- remap bufferView references
+      |
+      v
+repacked BIN chunk
+      |
+      +-- 4-byte aligned ranges
+      +-- updated buffer byteLength
+      |
+      v
+compact required-BasisU GLB
+      |
+      +-- SHA-256
+      +-- byte savings
+      +-- removal evidence
+      |
+      v
+phiform.basisu-compact-receipt.v1
+```
+
+The compact file is a new derived artifact. Rung 12 never rewrites the editable source or destroys the fallback-bearing Rung 11 output.
