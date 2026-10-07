@@ -176,7 +176,7 @@ export interface PortableProjectV1 {
   glbBase64?: string
 }
 
-export type PortableProject = PortableProjectV5
+export type PortableProject = PortableProjectV6
 
 
 export interface AgentAuditFingerprint {
@@ -364,6 +364,106 @@ export interface PortableProjectV5 {
   agentReceipts: AgentAuditReceipt[]
   productionReceipts: ProductionReceipt[]
   enginePackReceipts: EnginePackReceipt[]
+  latestReceipt?: GenerationReceipt
+  glbBase64?: string
+}
+
+
+export type TextureProfileId =
+  | 'archive-textures'
+  | 'web-textures'
+  | 'game-textures'
+
+export type TextureRole =
+  | 'base-color'
+  | 'emissive'
+  | 'normal'
+  | 'roughness'
+  | 'metalness'
+  | 'occlusion'
+  | 'alpha'
+  | 'bump'
+  | 'displacement'
+  | 'light'
+  | 'unknown'
+
+export type TextureColorExpectation = 'srgb' | 'linear'
+
+export interface TextureAuditEntry {
+  id: string
+  name: string
+  roles: TextureRole[]
+  width: number
+  height: number
+  maxDimension: number
+  powerOfTwo: boolean
+  colorSpace: string
+  expectedColorSpaces: TextureColorExpectation[]
+  colorSpaceMatch: boolean
+  channel: number
+  estimatedGpuBytes: number
+  overDimensionBudget: boolean
+}
+
+export interface MaterialAuditEntry {
+  id: string
+  name: string
+  type: string
+  textureIds: string[]
+  packedOrmTextureId?: string
+  issues: string[]
+}
+
+export interface TextureAudit {
+  profileId: TextureProfileId
+  textures: TextureAuditEntry[]
+  materials: MaterialAuditEntry[]
+  totals: {
+    textures: number
+    materials: number
+    uniquePixels: number
+    estimatedGpuBytes: number
+    oversizedTextures: number
+    colorSpaceMismatches: number
+    materialsWithoutTextures: number
+    packedOrmMaterials: number
+  }
+  qualification: 'pass' | 'warning' | 'fail'
+  notes: string[]
+}
+
+export interface TextureCompressionPlanEntry {
+  textureId: string
+  roles: TextureRole[]
+  target: 'ktx2-basisu'
+  mode: 'etc1s' | 'uastc'
+  status: 'planned-not-executed'
+  reason: string
+}
+
+export interface TextureReceipt {
+  schema: 'phiform.texture-receipt.v1'
+  id: string
+  createdAt: string
+  sourceArtifactId: string
+  sourceNodeId: string
+  profileId: TextureProfileId
+  audit: TextureAudit
+  compressionPlan: TextureCompressionPlanEntry[]
+  compressionExecuted: false
+  notes: string[]
+}
+
+export interface PortableProjectV6 {
+  schema: 'phiform.project.v6'
+  savedAt: string
+  artifact: ModelArtifact
+  edits: WorkspaceEditState
+  editGraph: EditGraph
+  agentReceipts: AgentAuditReceipt[]
+  productionReceipts: ProductionReceipt[]
+  enginePackReceipts: EnginePackReceipt[]
+  textureReceipts: TextureReceipt[]
   latestReceipt?: GenerationReceipt
   glbBase64?: string
 }

@@ -16,6 +16,7 @@ import {
   engineProfileId,
 } from '../engine/pack'
 import type { EngineRuntimeResult } from '../engine/runtime'
+import { auditTextures } from '../texture/audit'
 import type {
   EditTarget,
   EngineTarget,
@@ -25,6 +26,8 @@ import type {
   PrimitiveKind,
   ProductionAudit,
   ProductionProfileId,
+  TextureAudit,
+  TextureProfileId,
   TransformMode,
   WorkspaceEditState,
 } from '../core/types'
@@ -177,12 +180,14 @@ interface ViewportProps {
   productionRequest: number
   engineTarget: EngineTarget
   engineRequest: number
+  textureProfileId: TextureProfileId
   onSelectedChange: (selected: boolean) => void
   onTargetChange: (target: EditTarget) => void
   onMeshTargetsChange: (targets: MeshTarget[]) => void
   onEditsChange: (edits: WorkspaceEditState) => void
   onStatsChange: (stats: MeshStats) => void
   onProductionAuditChange: (audit: ProductionAudit) => void
+  onTextureAuditChange: (audit: TextureAudit) => void
   onExportComplete: (blob: Blob) => void
   onProductionComplete: (result: ProductionRuntimeResult) => void
   onEngineComplete: (result: EngineRuntimeResult) => void
@@ -200,12 +205,14 @@ export function Viewport({
   productionRequest,
   engineTarget,
   engineRequest,
+  textureProfileId,
   onSelectedChange,
   onTargetChange,
   onMeshTargetsChange,
   onEditsChange,
   onStatsChange,
   onProductionAuditChange,
+  onTextureAuditChange,
   onExportComplete,
   onProductionComplete,
   onEngineComplete,
@@ -417,6 +424,7 @@ export function Viewport({
     onProductionAuditChange(
       auditObject(object, productionProfile(productionProfileId).requireUvs),
     )
+    onTextureAuditChange(auditTextures(object, textureProfileId))
     applyingRef.current = false
   }, [edits])
 
@@ -444,6 +452,7 @@ export function Viewport({
       onProductionAuditChange(
         auditObject(object, productionProfile(productionProfileId).requireUvs),
       )
+      onTextureAuditChange(auditTextures(object, textureProfileId))
       setLoadState('ready')
       onSelectedChange(true)
 
@@ -507,6 +516,12 @@ export function Viewport({
       auditObject(object, productionProfile(productionProfileId).requireUvs),
     )
   }, [productionProfileId])
+
+  useEffect(() => {
+    const object = objectRef.current
+    if (!object) return
+    onTextureAuditChange(auditTextures(object, textureProfileId))
+  }, [textureProfileId])
 
   useEffect(() => {
     if (
