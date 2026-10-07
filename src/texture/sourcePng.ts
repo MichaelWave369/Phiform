@@ -133,7 +133,9 @@ async function textureToPng(
   const raw = dataTexturePixels(texture, width, height)
 
   if (raw) {
-    context.putImageData(new ImageData(raw, width, height), 0, 0)
+    const owned = new Uint8ClampedArray(raw.length)
+    owned.set(raw)
+    context.putImageData(new ImageData(owned, width, height), 0, 0)
   } else {
     if (texture.type !== THREE.UnsignedByteType) {
       throw new Error(
