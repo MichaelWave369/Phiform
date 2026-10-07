@@ -200,7 +200,7 @@ export interface AgentAuditReceipt {
   after: AgentAuditFingerprint
   reason?: string
   result?: Record<string, unknown>
-  effects: Array<{ kind: string; [key: string]: unknown }>
+  effects: Array<{ kind: 'export-glb'; filename?: string }>
 }
 
 export interface PortableProjectV2 {
