@@ -41,6 +41,9 @@ jobs:
       - name: Texture + material contract
         run: npm run texture:contract
 
+      - name: Executed KTX2 encoder contract
+        run: npm run texture:encode:contract
+
       - name: Typecheck
         run: npm run check
 
