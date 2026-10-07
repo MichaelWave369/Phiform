@@ -555,10 +555,13 @@ export interface BasisuDerivedReceipt {
   outputGlbByteLength: number
   extensionUsed: 'KHR_texture_basisu'
   extensionRequired: false
+  bindingCoverage: 'full' | 'partial'
   boundTextureCount: number
   fallbackOnlyTextureCount: number
+  unboundExecutedTextureCount: number
   bindings: BasisuTextureBinding[]
   fallbackOnlyTextureNames: string[]
+  unboundExecutedTextureIds: string[]
   notes: string[]
 }
 
