@@ -1,6 +1,7 @@
 import type {
   BasisuCompactReceipt,
   BasisuDerivedReceipt,
+  GltfValidationReceipt,
   TextureAudit,
   TextureEncoderDescriptor,
   TextureEncodingReceipt,
@@ -20,6 +21,7 @@ interface TexturePanelProps {
   basisuBusy: boolean
   basisuReceipts: readonly BasisuDerivedReceipt[]
   compactReceipts: readonly BasisuCompactReceipt[]
+  validationReceipts: readonly GltfValidationReceipt[]
   compactBusy: boolean
   compactSessionReady: boolean
   basisuSessionReady: boolean
@@ -48,6 +50,7 @@ export function TexturePanel({
   basisuBusy,
   basisuReceipts,
   compactReceipts,
+  validationReceipts,
   compactBusy,
   compactSessionReady,
   basisuSessionReady,
@@ -63,6 +66,7 @@ export function TexturePanel({
   const latestEncoding = encodingReceipts.at(-1)
   const latestBasisu = basisuReceipts.at(-1)
   const latestCompact = compactReceipts.at(-1)
+  const latestValidation = validationReceipts.at(-1)
   const canExecute =
     Boolean(audit) &&
     audit?.qualification !== 'fail' &&
@@ -289,6 +293,21 @@ export function TexturePanel({
           </small>
           <p>
             {bytes(Math.max(latestCompact.byteSavings, 0))} saved · {latestCompact.removedFallbackImageCount} fallback images removed
+          </p>
+        </div>
+      )}
+
+      {latestValidation && (
+        <div className={`gltf-validation-receipt ${latestValidation.qualification}`}>
+          <span>KHRONOS GLTF VALIDATION</span>
+          <strong>
+            {latestValidation.qualification} · {latestValidation.target}
+          </strong>
+          <small>
+            {latestValidation.official.validatorVersion} · {latestValidation.official.numErrors} errors · {latestValidation.official.numWarnings} warnings
+          </small>
+          <p>
+            PhiForm BasisU {latestValidation.phiformBasisu.status} · {latestValidation.official.numInfos} infos · {latestValidation.official.numHints} hints
           </p>
         </div>
       )}
