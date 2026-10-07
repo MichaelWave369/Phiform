@@ -18,7 +18,8 @@
     "texture:contract": "tsx scripts/texture-material-check.ts",
     "texture:encode:contract": "node scripts/texture-encoder-check.mjs",
     "basisu:contract": "tsx scripts/basisu-glb-check.ts",
-    "basisu:compact:contract": "tsx scripts/basisu-compact-check.ts"
+    "basisu:compact:contract": "tsx scripts/basisu-compact-check.ts",
+    "gltf:validation:contract": "tsx scripts/gltf-validation-check.ts"
   },
   "dependencies": {
     "react": "^19.1.1",
