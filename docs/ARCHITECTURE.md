@@ -275,3 +275,42 @@ phiform.texture-receipt.v1
 ```
 
 The compression plan is evidence of intended downstream work, not evidence that encoding occurred. A future encoder must return real bytes and hashes before the authority boundary can advance from planned to executed.
+
+
+## Rung 10 — executed texture encoding boundary
+
+Rung 10 keeps native encoder authority behind localhost.
+
+```text
+audited texture
+      |
+      v
+normalized PNG + source hash
+      |
+      v
+localhost texture job
+      |
+      +-- codec allowlist
+      +-- fresh temp directory
+      +-- no shell interpolation
+      |
+      v
+Khronos ktx create
+      |
+      v
+KTX2 identifier + bridge SHA-256
+      |
+      v
+browser artifact fetch
+      |
+      +-- length check
+      +-- KTX2 identifier check
+      +-- independent SHA-256
+      |
+      v
+phiform.texture-encode-receipt.v1
+```
+
+The project does not grant the native KTX process access to arbitrary paths supplied by browser commands. The bridge creates and owns temporary input/output paths and removes them after execution.
+
+A completed encoding receipt proves standalone KTX2 output bytes. It does not imply that the source GLB was rewritten to reference those textures.
