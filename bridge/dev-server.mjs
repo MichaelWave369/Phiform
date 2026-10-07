@@ -182,6 +182,11 @@ const server = createServer(async (req, res) => {
         ? authorization.slice('Bearer '.length)
         : ''
 
+      if (!releaseSigner.authorized(token)) {
+        json(res, 401, { error: 'release signing authorization failed' })
+        return
+      }
+
       const body = await readJson(req, 256 * 1024 * 1024)
       if (
         typeof body.packageBase64 !== 'string' ||
