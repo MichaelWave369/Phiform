@@ -4,12 +4,14 @@ import { proofBackend } from './backends/proof.mjs'
 import { createSf3dBackend } from './backends/sf3d.mjs'
 import { createKtxEncoder, KTX_CODECS } from './texture/ktx.mjs'
 import { validateGlbBytes } from './validation/gltf.mjs'
+import { createReleaseSigner } from './signing/release.mjs'
 
 const host = process.env.PHIFORM_BRIDGE_HOST || '127.0.0.1'
 const port = Number(process.env.PHIFORM_BRIDGE_PORT || 8787)
 const jobs = new Map()
 const textureJobs = new Map()
 const textureEncoder = createKtxEncoder()
+const releaseSigner = createReleaseSigner(process.env)
 
 const implementations = [
   proofBackend,
@@ -19,7 +21,7 @@ const implementations = [
 function cors(res) {
   res.setHeader('access-control-allow-origin', '*')
   res.setHeader('access-control-allow-methods', 'GET, POST, OPTIONS')
-  res.setHeader('access-control-allow-headers', 'content-type')
+  res.setHeader('access-control-allow-headers', 'content-type, authorization')
 }
 
 function json(res, status, value) {
@@ -156,7 +158,7 @@ const server = createServer(async (req, res) => {
       json(res, 200, {
         schema: 'phiform.bridge.health.v1',
         status: 'ok',
-        bridgeVersion: '0.5.0',
+        bridgeVersion: '0.6.0',
       })
       return
     }
@@ -169,6 +171,40 @@ const server = createServer(async (req, res) => {
       json(res, 200, textureEncoder.probe())
       return
     }
+    if (req.method === 'GET' && url.pathname === '/v1/release-signer') {
+      json(res, 200, await releaseSigner.descriptor())
+      return
+    }
+
+    if (req.method === 'POST' && url.pathname === '/v1/release-attest') {
+      const authorization = req.headers.authorization || ''
+      const token = authorization.startsWith('Bearer ')
+        ? authorization.slice('Bearer '.length)
+        : ''
+
+      const body = await readJson(req, 256 * 1024 * 1024)
+      if (
+        typeof body.packageBase64 !== 'string' ||
+        !body.packageBase64 ||
+        !body.releaseReceipt
+      ) {
+        json(res, 400, {
+          error: 'packageBase64 and releaseReceipt are required',
+        })
+        return
+      }
+
+      const packageBytes = Buffer.from(body.packageBase64, 'base64')
+      const attestation = await releaseSigner.attest(
+        body.releaseReceipt,
+        packageBytes,
+        token,
+      )
+
+      json(res, 200, attestation)
+      return
+    }
+
     if (req.method === 'POST' && url.pathname === '/v1/gltf-validate') {
       const body = await readJson(req, 192 * 1024 * 1024)
       if (
@@ -398,6 +434,6 @@ const server = createServer(async (req, res) => {
 server.listen(port, host, () => {
   const available = implementations.filter((item) => item.descriptor.available)
   process.stdout.write(
-    `PhiForm local bridge v0.5.0 listening on http://${host}:${port} · ${available.length}/${implementations.length} backends available\n`,
+    `PhiForm local bridge v0.6.0 listening on http://${host}:${port} · ${available.length}/${implementations.length} backends available\n`,
   )
 })
