@@ -305,6 +305,12 @@ export function inspectBasisuGlb(glb: Uint8Array): {
     mimeType?: string
     bufferView?: number
   }>
+  bufferByteLength: number
+  bufferViews: Array<{
+    buffer?: number
+    byteOffset?: number
+    byteLength?: number
+  }>
 } {
   const { json } = parseGlb(glb)
   return {
@@ -325,6 +331,12 @@ export function inspectBasisuGlb(glb: Uint8Array): {
     images: (json.images ?? []).map((image) => ({
       mimeType: image.mimeType,
       bufferView: image.bufferView,
+    })),
+    bufferByteLength: json.buffers?.[0]?.byteLength ?? 0,
+    bufferViews: (json.bufferViews ?? []).map((view) => ({
+      buffer: view.buffer,
+      byteOffset: view.byteOffset,
+      byteLength: view.byteLength,
     })),
   }
 }
