@@ -176,7 +176,7 @@ export interface PortableProjectV1 {
   glbBase64?: string
 }
 
-export type PortableProject = PortableProjectV3
+export type PortableProject = PortableProjectV4
 
 
 export interface AgentAuditFingerprint {
@@ -220,6 +220,82 @@ export interface PortableProjectV3 {
   edits: WorkspaceEditState
   editGraph: EditGraph
   agentReceipts: AgentAuditReceipt[]
+  latestReceipt?: GenerationReceipt
+  glbBase64?: string
+}
+
+
+export type ProductionProfileId =
+  | 'archive-glb'
+  | 'web-balanced'
+  | 'godot-game'
+  | 'unreal-game'
+
+export interface GeometryAudit {
+  meshId: string
+  name: string
+  vertices: number
+  triangles: number
+  indexed: boolean
+  normalsPresent: boolean
+  normalsFinite: boolean
+  uvsPresent: boolean
+  uvsFinite: boolean
+  invalidVertices: number
+  degenerateTriangles: number
+  boundaryEdges: number
+  nonManifoldEdges: number
+}
+
+export interface ProductionAudit {
+  meshes: GeometryAudit[]
+  totals: {
+    meshes: number
+    vertices: number
+    triangles: number
+    invalidVertices: number
+    degenerateTriangles: number
+    boundaryEdges: number
+    nonManifoldEdges: number
+    meshesMissingNormals: number
+    meshesMissingUvs: number
+  }
+  qualification: 'pass' | 'warning' | 'fail'
+  notes: string[]
+}
+
+export interface ProductionArtifactFile {
+  label: string
+  filename: string
+  lod: number
+  ratio: number
+  triangles: number
+  byteLength: number
+  sha256: string
+}
+
+export interface ProductionReceipt {
+  schema: 'phiform.production-receipt.v1'
+  id: string
+  createdAt: string
+  sourceArtifactId: string
+  sourceNodeId: string
+  profileId: ProductionProfileId
+  qualification: 'pass' | 'warning' | 'fail'
+  before: ProductionAudit
+  after: ProductionAudit[]
+  operations: string[]
+  files: ProductionArtifactFile[]
+}
+
+export interface PortableProjectV4 {
+  schema: 'phiform.project.v4'
+  savedAt: string
+  artifact: ModelArtifact
+  edits: WorkspaceEditState
+  editGraph: EditGraph
+  agentReceipts: AgentAuditReceipt[]
+  productionReceipts: ProductionReceipt[]
   latestReceipt?: GenerationReceipt
   glbBase64?: string
 }
