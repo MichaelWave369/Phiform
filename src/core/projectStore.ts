@@ -11,7 +11,9 @@ import type {
   PortableProjectV3,
   PortableProjectV4,
   PortableProjectV5,
+  PortableProjectV6,
   ProductionReceipt,
+  TextureReceipt,
   WorkspaceEditState,
 } from './types'
 
@@ -25,6 +27,7 @@ type AnyProject =
   | PortableProjectV3
   | PortableProjectV4
   | PortableProjectV5
+  | PortableProjectV6
 
 interface StoredProjectRecord {
   key: string
@@ -89,6 +92,19 @@ function manifestArtifact(artifact: ModelArtifact): ModelArtifact {
 }
 
 function normalizeProject(project: AnyProject): PortableProject {
+  if (project.schema === 'phiform.project.v6') {
+    if (project.editGraph?.schema !== 'phiform.edit-graph.v1') {
+      throw new Error('PhiForm project v6 is missing a valid edit graph.')
+    }
+    if (!Array.isArray(project.agentReceipts) ||
+        !Array.isArray(project.productionReceipts) ||
+        !Array.isArray(project.enginePackReceipts) ||
+        !Array.isArray(project.textureReceipts)) {
+      throw new Error('PhiForm project v6 is missing one or more receipt arrays.')
+    }
+    return project
+  }
+
   if (project.schema === 'phiform.project.v5') {
     if (project.editGraph?.schema !== 'phiform.edit-graph.v1') {
       throw new Error('PhiForm project v5 is missing a valid edit graph.')
@@ -102,12 +118,24 @@ function normalizeProject(project: AnyProject): PortableProject {
     if (!Array.isArray(project.enginePackReceipts)) {
       throw new Error('PhiForm project v5 is missing its engine pack receipt array.')
     }
-    return project
+    return {
+      schema: 'phiform.project.v6',
+      savedAt: project.savedAt,
+      artifact: project.artifact,
+      edits: project.edits,
+      editGraph: project.editGraph,
+      agentReceipts: project.agentReceipts,
+      productionReceipts: project.productionReceipts,
+      enginePackReceipts: project.enginePackReceipts,
+      textureReceipts: [],
+      latestReceipt: project.latestReceipt,
+      glbBase64: project.glbBase64,
+    }
   }
 
   if (project.schema === 'phiform.project.v4') {
     return {
-      schema: 'phiform.project.v5',
+      schema: 'phiform.project.v6',
       savedAt: project.savedAt,
       artifact: project.artifact,
       edits: project.edits,
@@ -115,6 +143,7 @@ function normalizeProject(project: AnyProject): PortableProject {
       agentReceipts: project.agentReceipts,
       productionReceipts: project.productionReceipts,
       enginePackReceipts: [],
+      textureReceipts: [],
       latestReceipt: project.latestReceipt,
       glbBase64: project.glbBase64,
     }
@@ -122,7 +151,7 @@ function normalizeProject(project: AnyProject): PortableProject {
 
   if (project.schema === 'phiform.project.v3') {
     return {
-      schema: 'phiform.project.v5',
+      schema: 'phiform.project.v6',
       savedAt: project.savedAt,
       artifact: project.artifact,
       edits: project.edits,
@@ -130,6 +159,7 @@ function normalizeProject(project: AnyProject): PortableProject {
       agentReceipts: project.agentReceipts,
       productionReceipts: [],
       enginePackReceipts: [],
+      textureReceipts: [],
       latestReceipt: project.latestReceipt,
       glbBase64: project.glbBase64,
     }
@@ -137,7 +167,7 @@ function normalizeProject(project: AnyProject): PortableProject {
 
   if (project.schema === 'phiform.project.v2') {
     return {
-      schema: 'phiform.project.v5',
+      schema: 'phiform.project.v6',
       savedAt: project.savedAt,
       artifact: project.artifact,
       edits: project.edits,
@@ -145,13 +175,14 @@ function normalizeProject(project: AnyProject): PortableProject {
       agentReceipts: [],
       productionReceipts: [],
       enginePackReceipts: [],
+      textureReceipts: [],
       latestReceipt: project.latestReceipt,
       glbBase64: project.glbBase64,
     }
   }
 
   return {
-    schema: 'phiform.project.v5',
+    schema: 'phiform.project.v6',
     savedAt: project.savedAt,
     artifact: project.artifact,
     edits: project.edits,
@@ -189,11 +220,12 @@ export async function saveProjectToBrowser(
   agentReceipts: readonly AgentAuditReceipt[],
   productionReceipts: readonly ProductionReceipt[],
   enginePackReceipts: readonly EnginePackReceipt[],
+  textureReceipts: readonly TextureReceipt[],
   latestReceipt?: GenerationReceipt,
 ): Promise<void> {
   const glb = await fetchGlb(artifact)
   const project: PortableProject = {
-    schema: 'phiform.project.v5',
+    schema: 'phiform.project.v6',
     savedAt: new Date().toISOString(),
     artifact: manifestArtifact(artifact),
     edits,
@@ -201,6 +233,7 @@ export async function saveProjectToBrowser(
     agentReceipts: [...agentReceipts],
     productionReceipts: [...productionReceipts],
     enginePackReceipts: [...enginePackReceipts],
+    textureReceipts: [...textureReceipts],
     latestReceipt,
   }
 
@@ -238,11 +271,12 @@ export async function createPortableProject(
   agentReceipts: readonly AgentAuditReceipt[],
   productionReceipts: readonly ProductionReceipt[],
   enginePackReceipts: readonly EnginePackReceipt[],
+  textureReceipts: readonly TextureReceipt[],
   latestReceipt?: GenerationReceipt,
 ): Promise<PortableProject> {
   const glb = await fetchGlb(artifact)
   return {
-    schema: 'phiform.project.v5',
+    schema: 'phiform.project.v6',
     savedAt: new Date().toISOString(),
     artifact: manifestArtifact(artifact),
     edits,
@@ -250,6 +284,7 @@ export async function createPortableProject(
     agentReceipts: [...agentReceipts],
     productionReceipts: [...productionReceipts],
     enginePackReceipts: [...enginePackReceipts],
+    textureReceipts: [...textureReceipts],
     latestReceipt,
     glbBase64: glb ? arrayBufferToBase64(glb) : undefined,
   }
@@ -280,7 +315,8 @@ export async function readPortableProject(file: File): Promise<PortableProject> 
       parsed.schema !== 'phiform.project.v2' &&
       parsed.schema !== 'phiform.project.v3' &&
       parsed.schema !== 'phiform.project.v4' &&
-      parsed.schema !== 'phiform.project.v5') ||
+      parsed.schema !== 'phiform.project.v5' &&
+      parsed.schema !== 'phiform.project.v6') ||
     !parsed.artifact ||
     !parsed.edits
   ) {
