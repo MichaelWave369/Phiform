@@ -241,3 +241,37 @@ phiform.engine-pack-receipt.v1
 The engine package is a derived downstream artifact. It does not mutate the source artifact, edit graph, or production receipts.
 
 Native engine resources remain outside PhiForm's authority boundary in Rung 8.
+
+
+## Rung 9 — texture qualification boundary
+
+Texture/material qualification observes loaded scene state without modifying the source artifact.
+
+```text
+loaded materials
+      |
+      v
+texture-role inventory
+      |
+      +-- dimensions
+      +-- color-space expectation
+      +-- unique texture identity
+      +-- packed ORM reuse
+      +-- estimated GPU memory
+      |
+      v
+texture policy
+      |
+      +-- archive
+      +-- web
+      +-- game
+      |
+      v
+phiform.texture-receipt.v1
+      |
+      +-- qualification
+      +-- KTX2/Basis compression plan
+      +-- compressionExecuted: false
+```
+
+The compression plan is evidence of intended downstream work, not evidence that encoding occurred. A future encoder must return real bytes and hashes before the authority boundary can advance from planned to executed.
