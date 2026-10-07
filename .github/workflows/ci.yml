@@ -56,6 +56,9 @@ jobs:
       - name: Governed release candidate contract
         run: npm run release:contract
 
+      - name: Ed25519 release attestation contract
+        run: npm run attestation:contract
+
       - name: Typecheck
         run: npm run check
 
