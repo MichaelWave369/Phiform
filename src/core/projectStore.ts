@@ -1,6 +1,7 @@
 import { createEditGraph } from './editGraph'
 import type {
   AgentAuditReceipt,
+  BasisuDerivedReceipt,
   EditGraph,
   EnginePackReceipt,
   GenerationReceipt,
@@ -13,6 +14,7 @@ import type {
   PortableProjectV5,
   PortableProjectV6,
   PortableProjectV7,
+  PortableProjectV8,
   ProductionReceipt,
   TextureEncodingReceipt,
   TextureReceipt,
@@ -31,6 +33,7 @@ type AnyProject =
   | PortableProjectV5
   | PortableProjectV6
   | PortableProjectV7
+  | PortableProjectV8
 
 interface StoredProjectRecord {
   key: string
@@ -95,6 +98,21 @@ function manifestArtifact(artifact: ModelArtifact): ModelArtifact {
 }
 
 function normalizeProject(project: AnyProject): PortableProject {
+  if (project.schema === 'phiform.project.v8') {
+    if (project.editGraph?.schema !== 'phiform.edit-graph.v1') {
+      throw new Error('PhiForm project v8 is missing a valid edit graph.')
+    }
+    if (!Array.isArray(project.agentReceipts) ||
+        !Array.isArray(project.productionReceipts) ||
+        !Array.isArray(project.enginePackReceipts) ||
+        !Array.isArray(project.textureReceipts) ||
+        !Array.isArray(project.textureEncodingReceipts) ||
+        !Array.isArray(project.basisuDerivedReceipts)) {
+      throw new Error('PhiForm project v8 is missing one or more receipt arrays.')
+    }
+    return project
+  }
+
   if (project.schema === 'phiform.project.v7') {
     if (project.editGraph?.schema !== 'phiform.edit-graph.v1') {
       throw new Error('PhiForm project v7 is missing a valid edit graph.')
@@ -106,7 +124,21 @@ function normalizeProject(project: AnyProject): PortableProject {
         !Array.isArray(project.textureEncodingReceipts)) {
       throw new Error('PhiForm project v7 is missing one or more receipt arrays.')
     }
-    return project
+    return {
+      schema: 'phiform.project.v8',
+      savedAt: project.savedAt,
+      artifact: project.artifact,
+      edits: project.edits,
+      editGraph: project.editGraph,
+      agentReceipts: project.agentReceipts,
+      productionReceipts: project.productionReceipts,
+      enginePackReceipts: project.enginePackReceipts,
+      textureReceipts: project.textureReceipts,
+      textureEncodingReceipts: project.textureEncodingReceipts,
+      basisuDerivedReceipts: [],
+      latestReceipt: project.latestReceipt,
+      glbBase64: project.glbBase64,
+    }
   }
 
   if (project.schema === 'phiform.project.v6') {
@@ -120,7 +152,7 @@ function normalizeProject(project: AnyProject): PortableProject {
       throw new Error('PhiForm project v6 is missing one or more receipt arrays.')
     }
     return {
-      schema: 'phiform.project.v7',
+      schema: 'phiform.project.v8',
       savedAt: project.savedAt,
       artifact: project.artifact,
       edits: project.edits,
@@ -130,6 +162,7 @@ function normalizeProject(project: AnyProject): PortableProject {
       enginePackReceipts: project.enginePackReceipts,
       textureReceipts: project.textureReceipts,
       textureEncodingReceipts: [],
+      basisuDerivedReceipts: [],
       latestReceipt: project.latestReceipt,
       glbBase64: project.glbBase64,
     }
@@ -149,7 +182,7 @@ function normalizeProject(project: AnyProject): PortableProject {
       throw new Error('PhiForm project v5 is missing its engine pack receipt array.')
     }
     return {
-      schema: 'phiform.project.v7',
+      schema: 'phiform.project.v8',
       savedAt: project.savedAt,
       artifact: project.artifact,
       edits: project.edits,
@@ -159,6 +192,7 @@ function normalizeProject(project: AnyProject): PortableProject {
       enginePackReceipts: project.enginePackReceipts,
       textureReceipts: [],
       textureEncodingReceipts: [],
+      basisuDerivedReceipts: [],
       latestReceipt: project.latestReceipt,
       glbBase64: project.glbBase64,
     }
@@ -166,7 +200,7 @@ function normalizeProject(project: AnyProject): PortableProject {
 
   if (project.schema === 'phiform.project.v4') {
     return {
-      schema: 'phiform.project.v7',
+      schema: 'phiform.project.v8',
       savedAt: project.savedAt,
       artifact: project.artifact,
       edits: project.edits,
@@ -176,6 +210,7 @@ function normalizeProject(project: AnyProject): PortableProject {
       enginePackReceipts: [],
       textureReceipts: [],
       textureEncodingReceipts: [],
+      basisuDerivedReceipts: [],
       latestReceipt: project.latestReceipt,
       glbBase64: project.glbBase64,
     }
@@ -183,7 +218,7 @@ function normalizeProject(project: AnyProject): PortableProject {
 
   if (project.schema === 'phiform.project.v3') {
     return {
-      schema: 'phiform.project.v7',
+      schema: 'phiform.project.v8',
       savedAt: project.savedAt,
       artifact: project.artifact,
       edits: project.edits,
@@ -193,6 +228,7 @@ function normalizeProject(project: AnyProject): PortableProject {
       enginePackReceipts: [],
       textureReceipts: [],
       textureEncodingReceipts: [],
+      basisuDerivedReceipts: [],
       latestReceipt: project.latestReceipt,
       glbBase64: project.glbBase64,
     }
@@ -200,7 +236,7 @@ function normalizeProject(project: AnyProject): PortableProject {
 
   if (project.schema === 'phiform.project.v2') {
     return {
-      schema: 'phiform.project.v7',
+      schema: 'phiform.project.v8',
       savedAt: project.savedAt,
       artifact: project.artifact,
       edits: project.edits,
@@ -210,13 +246,14 @@ function normalizeProject(project: AnyProject): PortableProject {
       enginePackReceipts: [],
       textureReceipts: [],
       textureEncodingReceipts: [],
+      basisuDerivedReceipts: [],
       latestReceipt: project.latestReceipt,
       glbBase64: project.glbBase64,
     }
   }
 
   return {
-    schema: 'phiform.project.v7',
+    schema: 'phiform.project.v8',
     savedAt: project.savedAt,
     artifact: project.artifact,
     edits: project.edits,
@@ -226,6 +263,7 @@ function normalizeProject(project: AnyProject): PortableProject {
     enginePackReceipts: [],
     textureReceipts: [],
     textureEncodingReceipts: [],
+    basisuDerivedReceipts: [],
     latestReceipt: project.latestReceipt,
     glbBase64: project.glbBase64,
   }
@@ -258,11 +296,12 @@ export async function saveProjectToBrowser(
   enginePackReceipts: readonly EnginePackReceipt[],
   textureReceipts: readonly TextureReceipt[],
   textureEncodingReceipts: readonly TextureEncodingReceipt[],
+  basisuDerivedReceipts: readonly BasisuDerivedReceipt[],
   latestReceipt?: GenerationReceipt,
 ): Promise<void> {
   const glb = await fetchGlb(artifact)
   const project: PortableProject = {
-    schema: 'phiform.project.v7',
+    schema: 'phiform.project.v8',
     savedAt: new Date().toISOString(),
     artifact: manifestArtifact(artifact),
     edits,
@@ -272,6 +311,7 @@ export async function saveProjectToBrowser(
     enginePackReceipts: [...enginePackReceipts],
     textureReceipts: [...textureReceipts],
     textureEncodingReceipts: [...textureEncodingReceipts],
+    basisuDerivedReceipts: [...basisuDerivedReceipts],
     latestReceipt,
   }
 
@@ -311,11 +351,12 @@ export async function createPortableProject(
   enginePackReceipts: readonly EnginePackReceipt[],
   textureReceipts: readonly TextureReceipt[],
   textureEncodingReceipts: readonly TextureEncodingReceipt[],
+  basisuDerivedReceipts: readonly BasisuDerivedReceipt[],
   latestReceipt?: GenerationReceipt,
 ): Promise<PortableProject> {
   const glb = await fetchGlb(artifact)
   return {
-    schema: 'phiform.project.v7',
+    schema: 'phiform.project.v8',
     savedAt: new Date().toISOString(),
     artifact: manifestArtifact(artifact),
     edits,
@@ -325,6 +366,7 @@ export async function createPortableProject(
     enginePackReceipts: [...enginePackReceipts],
     textureReceipts: [...textureReceipts],
     textureEncodingReceipts: [...textureEncodingReceipts],
+    basisuDerivedReceipts: [...basisuDerivedReceipts],
     latestReceipt,
     glbBase64: glb ? arrayBufferToBase64(glb) : undefined,
   }
@@ -357,7 +399,8 @@ export async function readPortableProject(file: File): Promise<PortableProject> 
       parsed.schema !== 'phiform.project.v4' &&
       parsed.schema !== 'phiform.project.v5' &&
       parsed.schema !== 'phiform.project.v6' &&
-      parsed.schema !== 'phiform.project.v7') ||
+      parsed.schema !== 'phiform.project.v7' &&
+      parsed.schema !== 'phiform.project.v8') ||
     !parsed.artifact ||
     !parsed.edits
   ) {

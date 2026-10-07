@@ -44,6 +44,9 @@ jobs:
       - name: Executed KTX2 encoder contract
         run: npm run texture:encode:contract
 
+      - name: KHR_texture_basisu GLB contract
+        run: npm run basisu:contract
+
       - name: Typecheck
         run: npm run check
 

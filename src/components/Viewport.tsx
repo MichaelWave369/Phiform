@@ -21,6 +21,7 @@ import {
   prepareTexturePngSources,
   type PreparedTexturePng,
 } from '../texture/sourcePng'
+import { makeTextureMarker } from '../gltf/basisuGlb'
 import type {
   EditTarget,
   EngineTarget,
@@ -35,6 +36,60 @@ import type {
   TransformMode,
   WorkspaceEditState,
 } from '../core/types'
+
+
+const BASISU_TEXTURE_KEYS = [
+  'map',
+  'emissiveMap',
+  'normalMap',
+  'roughnessMap',
+  'metalnessMap',
+  'aoMap',
+  'alphaMap',
+  'bumpMap',
+  'displacementMap',
+  'lightMap',
+] as const
+
+type TextureMaterial = THREE.Material & Record<string, unknown>
+
+function prepareBasisuExportTextureTags(object: THREE.Object3D): () => void {
+  const originals = new Map<THREE.Texture, string>()
+
+  object.traverse((child) => {
+    if (!(child instanceof THREE.Mesh)) return
+    const materials = Array.isArray(child.material)
+      ? child.material
+      : [child.material]
+
+    for (const raw of materials) {
+      const material = raw as TextureMaterial
+      const metalness = material.metalnessMap
+      const roughness = material.roughnessMap
+
+      if (
+        metalness instanceof THREE.Texture &&
+        roughness instanceof THREE.Texture &&
+        metalness !== roughness
+      ) {
+        throw new Error(
+          'Rung 11 refuses separate metalness + roughness textures because Three would synthesize a new packed texture during export. Pack them first or reuse one ORM texture.',
+        )
+      }
+
+      for (const key of BASISU_TEXTURE_KEYS) {
+        const value = material[key]
+        if (!(value instanceof THREE.Texture) || originals.has(value)) continue
+        originals.set(value, value.name)
+        value.name = makeTextureMarker(value.uuid, value.name)
+      }
+    }
+  })
+
+  return () => {
+    for (const [texture, name] of originals) texture.name = name
+  }
+}
 
 function geometryFor(kind: PrimitiveKind): THREE.BufferGeometry {
   switch (kind) {
@@ -186,6 +241,7 @@ interface ViewportProps {
   engineRequest: number
   textureProfileId: TextureProfileId
   textureEncodeRequest: number
+  basisuGlbRequest: number
   onSelectedChange: (selected: boolean) => void
   onTargetChange: (target: EditTarget) => void
   onMeshTargetsChange: (targets: MeshTarget[]) => void
@@ -197,6 +253,7 @@ interface ViewportProps {
     audit: TextureAudit,
     sources: PreparedTexturePng[],
   ) => void
+  onBasisuSourceGlbReady: (blob: Blob) => void
   onExportComplete: (blob: Blob) => void
   onProductionComplete: (result: ProductionRuntimeResult) => void
   onEngineComplete: (result: EngineRuntimeResult) => void
@@ -216,6 +273,7 @@ export function Viewport({
   engineRequest,
   textureProfileId,
   textureEncodeRequest,
+  basisuGlbRequest,
   onSelectedChange,
   onTargetChange,
   onMeshTargetsChange,
@@ -224,6 +282,7 @@ export function Viewport({
   onProductionAuditChange,
   onTextureAuditChange,
   onTextureSourcesReady,
+  onBasisuSourceGlbReady,
   onExportComplete,
   onProductionComplete,
   onEngineComplete,
@@ -241,6 +300,7 @@ export function Viewport({
   const productionSeenRef = useRef(0)
   const engineSeenRef = useRef(0)
   const textureEncodeSeenRef = useRef(0)
+  const basisuGlbSeenRef = useRef(0)
   const [loadState, setLoadState] = useState<'ready' | 'loading' | 'error'>('ready')
 
   useEffect(() => {
@@ -707,6 +767,61 @@ export function Viewport({
         )
       })
   }, [engineRequest])
+
+  useEffect(() => {
+    if (
+      basisuGlbRequest <= 0 ||
+      basisuGlbRequest === basisuGlbSeenRef.current
+    ) {
+      return
+    }
+    basisuGlbSeenRef.current = basisuGlbRequest
+
+    const object = objectRef.current
+    if (!object) {
+      onError('Nothing is loaded for BasisU GLB export.')
+      return
+    }
+
+    let restoreNames: (() => void) | undefined
+    try {
+      restoreNames = prepareBasisuExportTextureTags(object)
+    } catch (cause) {
+      onError(
+        cause instanceof Error
+          ? cause.message
+          : 'BasisU export preflight failed.',
+      )
+      return
+    }
+
+    new GLTFExporter()
+      .parseAsync(object, {
+        binary: true,
+        onlyVisible: true,
+        trs: true,
+      })
+      .then((result) => {
+        if (!(result instanceof ArrayBuffer)) {
+          throw new Error(
+            'BasisU source exporter returned JSON instead of binary GLB.',
+          )
+        }
+        onBasisuSourceGlbReady(
+          new Blob([result], { type: 'model/gltf-binary' }),
+        )
+      })
+      .catch((cause) => {
+        onError(
+          cause instanceof Error
+            ? cause.message
+            : 'BasisU source GLB export failed.',
+        )
+      })
+      .finally(() => {
+        restoreNames?.()
+      })
+  }, [basisuGlbRequest])
 
   useEffect(() => {
     if (exportRequest <= 0 || exportRequest === exportSeenRef.current) return

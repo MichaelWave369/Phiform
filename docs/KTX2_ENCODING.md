@@ -239,3 +239,14 @@ The fixture verifies:
 - source-hash mismatch rejection
 
 CI does **not** claim a real Basis codec run. Real execution requires operator-installed Khronos KTX Software.
+
+
+## Rung 11 binding handoff
+
+Rung 10 proves standalone KTX2 bytes.
+
+Rung 11 may consume those exact in-session bytes to derive a fallback-bearing GLB using `KHR_texture_basisu`.
+
+The Rung 10 receipt remains the encoder evidence. Rung 11 creates a separate derived-artifact receipt binding those KTX2 hashes to specific glTF texture objects.
+
+See [KHR_texture_basisu Derived GLB](BASISU_GLB.md).

@@ -4,9 +4,9 @@
 
 > Neural systems may propose geometry. The workspace keeps editable state, provenance, and export authority.
 
-## Current state — v0.10 / Rung 10
+## Current state — v0.11 / Rung 11
 
-PhiForm now closes the planned-vs-executed texture gap by driving an operator-installed Khronos KTX encoder and recording the exact KTX2/Basis bytes it returns.
+PhiForm now binds verified KTX2/Basis outputs into derived GLB assets using the ratified `KHR_texture_basisu` extension while preserving original image fallbacks.
 
 ### Rung 1 — workbench foundation ✅
 React/TypeScript studio, Three.js viewport, adapter contract, proof generation, receipts.
@@ -84,6 +84,26 @@ Topology/attribute audit, conservative repair, Meshopt-backed LOD generation, pr
 - `phiform.texture-encode-receipt.v1`
 - project v7 persistence of executed texture receipts
 - CI fixture verifies CLI arguments and bridge lifecycle without claiming a real codec run
+
+### Rung 11 — `KHR_texture_basisu` derived GLB ✅
+- texture-identity tags during Three.js GLB export
+- explicit refusal when Three would synthesize a metalness/roughness composite from two different source textures
+- pure GLB v2 parser/rewriter
+- verified KTX2 bytes appended to the embedded BIN chunk
+- 4-byte-aligned KTX2 bufferViews
+- `image/ktx2` image entries
+- `textures[*].extensions.KHR_texture_basisu.source` bindings
+- original PNG/JPEG `texture.source` fallback preserved
+- `extensionsUsed` includes `KHR_texture_basisu`
+- extension intentionally remains optional while fallback images exist
+- 4×4 dimension gate for `KHR_texture_basisu` compatibility
+- full vs partial binding coverage
+- fallback-only exported texture accounting
+- executed-but-unbound KTX2 accounting
+- source and derived GLB SHA-256
+- `phiform.basisu-derived-receipt.v1`
+- project v8 persistence of derived receipts
+- session-local KTX2 payload requirement prevents hashes from being mistaken for bytes
 
 ## Engine pack structure
 
@@ -193,6 +213,7 @@ npm run production:contract
 npm run engine:contract
 npm run texture:contract
 npm run texture:encode:contract
+npm run basisu:contract
 npm run check
 npm run build
 ```
@@ -202,12 +223,12 @@ npm run build
 New saves use:
 
 ```text
-phiform.project.v7
+phiform.project.v8
 ```
 
-Project v7 preserves generation evidence, workspace state, edit lineage, agent receipts, production receipts, engine-pack receipts, texture qualification receipts, executed KTX2 receipts, and embedded source GLB bytes.
+Project v8 preserves generation evidence, workspace state, edit lineage, agent receipts, production receipts, engine-pack receipts, texture qualification receipts, executed KTX2 receipts, BasisU-derived GLB receipts, and embedded source GLB bytes.
 
-Project v1 through v6 remain importable. Migration never invents history for capabilities that did not exist yet.
+Project v1 through v7 remain importable. Migration never invents history for capabilities that did not exist yet.
 
 ## Documentation
 
@@ -222,10 +243,11 @@ Project v1 through v6 remain importable. Migration never invents history for cap
 - [Engine asset packs](docs/ENGINE_PACKS.md)
 - [Texture + material qualification](docs/TEXTURES.md)
 - [Executed KTX2 / Basis encoding](docs/KTX2_ENCODING.md)
+- [KHR_texture_basisu derived GLB](docs/BASISU_GLB.md)
 
 ## Next
 
-The next texture rung can rebind verified KTX2 outputs into derived glTF/GLB assets using `KHR_texture_basisu`; other production work includes qualified manifold repair, better collision proxies, and semantic retopology.
+The next texture rung can compact fallback-bearing BasisU GLBs by safely stripping superseded PNG/JPEG image payloads and proving all remaining texture references; other production work includes qualified manifold repair, better collision proxies, and semantic retopology.
 
 ## License
 

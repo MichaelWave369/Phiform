@@ -314,3 +314,45 @@ phiform.texture-encode-receipt.v1
 The project does not grant the native KTX process access to arbitrary paths supplied by browser commands. The bridge creates and owns temporary input/output paths and removes them after execution.
 
 A completed encoding receipt proves standalone KTX2 output bytes. It does not imply that the source GLB was rewritten to reference those textures.
+
+
+## Rung 11 — BasisU GLB derivation boundary
+
+Rung 11 does not mutate the source artifact.
+
+```text
+current editable scene
+      |
+      +-- temporary texture identity tags
+      |
+      v
+Three.js GLB export
+      |
+      v
+source GLB bytes + SHA-256
+      |
+      +---------------------------+
+      |                           |
+      | verified in-session KTX2 |
+      | bytes from Rung 10        |
+      +-------------+-------------+
+                    |
+                    v
+pure GLB rewriter
+      |
+      +-- append aligned KTX2 bufferViews
+      +-- add image/ktx2 entries
+      +-- attach KHR_texture_basisu
+      +-- retain fallback texture.source
+      |
+      v
+derived fallback-bearing GLB
+      |
+      +-- SHA-256
+      +-- full / partial binding coverage
+      |
+      v
+phiform.basisu-derived-receipt.v1
+```
+
+Hashes establish identity but do not substitute for binary payloads. For that reason, persisted Rung 10 receipts alone cannot authorize a Rung 11 rewrite after reload; verified KTX2 bytes must be available again.
