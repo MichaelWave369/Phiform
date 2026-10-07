@@ -487,8 +487,8 @@ export interface TextureEncodeArtifact {
   name: string
   roles: TextureRole[]
   codec: TextureEncoderCodec
-  sourceKtx2Sha256: string
-  sourceKtx2ByteLength: number
+  sourcePngSha256: string
+  sourcePngByteLength: number
   outputSha256: string
   outputByteLength: number
   outputFilename: string
@@ -508,7 +508,7 @@ export interface TextureEncodingReceipt {
   encoderVersion: string
   compressionExecuted: true
   allOutputsValidated: true
-  totalSourceKtx2Bytes: number
+  totalSourcePngBytes: number
   totalOutputBytes: number
   aggregateCompressionRatio: number
   artifacts: TextureEncodeArtifact[]
