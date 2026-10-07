@@ -4,9 +4,9 @@
 
 > Neural systems may propose geometry. The workspace keeps editable state, provenance, and export authority.
 
-## Current state — v0.5 / Rung 5
+## Current state — v0.6 / Rung 6
 
-PhiForm now has a branchable edit graph on top of its neural generation and 3D editing stack.
+PhiForm now exposes its workspace and edit graph through a deterministic, capability-scoped agent command rail.
 
 ### Rung 1 — workbench foundation ✅
 React/TypeScript studio, Three.js viewport, adapter contract, proof generation, receipts.
@@ -21,60 +21,70 @@ Optional Stable Fast 3D integration through an operator-installed upstream check
 Orbit/select/transform/material editing, mesh inspection, browser persistence, portable projects, edited GLB export.
 
 ### Rung 5 — neural edit graph ✅
-- branchable edit history
-- explicit working-tree dirty/clean state
-- committed workspace snapshots
-- checkout of prior graph nodes
-- stable per-mesh targeting from viewport clicks
-- whole-artifact targeting
-- mesh-target metadata with vertex/triangle counts
-- neural edit intent nodes
-- explicit `recorded-only` execution state when no edit backend ran
-- formal `phiform.edit-receipt.v1` receipts
-- derived GLB export lineage with browser-computed SHA-256
-- project format v2 carrying the edit graph
-- automatic import migration from Rung 4 `phiform.project.v1`
-- CI contract for branch/intent/export lineage behavior
+Branchable history, committed snapshots, mesh targeting, recorded-only neural intent, edit receipts, and SHA-256 derived-export lineage.
 
-## Core history model
+### Rung 6 — governed agent command API ✅
+- `phiform.agent-command.v1`
+- `phiform.agent-receipt.v1`
+- operator-granted capability set
+- default grant is read-only
+- command-to-capability registry
+- optimistic preconditions for artifact / graph node / workspace revision
+- replay rejection by command ID
+- mesh inventory discovery
+- mesh target selection by stable ID
+- workspace transform commands
+- workspace material commands
+- graph commit / branch / checkout commands
+- neural intent recording
+- GLB export dispatch through the normal derived-artifact path
+- visible Agent Command Rail
+- browser SDK at `window.PhiFormAgent`
+- project format v3 persists agent audit receipts
+- automatic project v1/v2 migration
+- CI qualification for denied, stale, replayed, invalid-target, and valid commands
+
+## Governing model
 
 ```text
-source artifact
-      |
-      v
-[source node]  main
-      |
-      v
-[workspace snapshot]
-      |\
-      | \________________
-      |                  \
-      v                   v
-main                 handle-variant
-  |                       |
-  v                       v
-snapshot             neural edit intent
-                          |
-                          | execution: recorded-only
-                          | target: mesh-003
-                          v
-                    future edit backend
-                          |
-                          v
-                    derived artifact
+agent proposal
+     |
+     v
+phiform.agent-command.v1
+     |
+     +--> command known?
+     +--> capability granted?
+     +--> command id unused?
+     +--> expected artifact/node/revision still current?
+     |
+     v
+deterministic command executor
+     |
+     +--> workspace mutation
+     +--> edit graph mutation
+     +--> recorded neural intent
+     +--> export effect dispatch
+     |
+     v
+phiform.agent-receipt.v1
 ```
 
-An edit intent is **not** an edit result.
+The agent API does not expose arbitrary DOM control, shell execution, or a generic "do anything" escape hatch.
 
-PhiForm can now record:
+## Browser agent API
 
-- what should change
-- which mesh or artifact should change
-- which graph node the request descends from
-- which branch owns the request
-- what workspace state existed when it was requested
+The studio installs:
 
-Until a capable backend returns a changed artifact, that node remains `execution: recorded-only`.
+```js
+window.PhiFormAgent.describe()
+window.PhiFormAgent.submit(command)
+```
+
+`describe()` returns the command catalog, currently granted capabilities, state fingerprint, and discoverable mesh targets.
+
+`submit()` accepts a `phiform.agent-command.v1` envelope and returns a receipt.
+
+See [docs/AGENT_API.md](docs/AGENT_API.md).
 
 ## Run
 
@@ -83,7 +93,7 @@ npm install
 npm run dev
 ```
 
-Bridge:
+Local inference bridge:
 
 ```bash
 npm run bridge
@@ -96,6 +106,7 @@ Stable Fast 3D setup is documented in [docs/SF3D.md](docs/SF3D.md).
 ```bash
 npm run contract
 npm run graph:contract
+npm run agent:contract
 npm run check
 npm run build
 ```
@@ -105,19 +116,12 @@ npm run build
 New saves use:
 
 ```text
-phiform.project.v2
+phiform.project.v3
 ```
 
-Project v2 stores:
+Project v3 stores source state, generation provenance, the edit graph, embedded GLB bytes when needed, and the agent receipt audit trail.
 
-- source artifact metadata
-- current working edit state
-- generation receipt
-- `phiform.edit-graph.v1`
-- edit receipts
-- embedded GLB bytes for portable GLB projects
-
-Rung 4 `phiform.project.v1` files are migrated on import by creating a new source edit graph from their saved artifact/edit state.
+Project v1 and v2 files remain importable. Migration never invents historical agent receipts that did not exist.
 
 ## Documentation
 
@@ -127,6 +131,7 @@ Rung 4 `phiform.project.v1` files are migrated on import by creating a new sourc
 - [Stable Fast 3D backend](docs/SF3D.md)
 - [Editable workspace](docs/WORKSPACE.md)
 - [Neural edit graph](docs/EDIT_GRAPH.md)
+- [Agent command API](docs/AGENT_API.md)
 
 ## Planned rungs
 
@@ -135,7 +140,7 @@ Rung 4 `phiform.project.v1` files are migrated on import by creating a new sourc
 3. First neural backend / SF3D ✅
 4. Editable geometry workspace ✅
 5. Neural edit graph ✅
-6. **Agent interface**: deterministic commands and capability-scoped modeling operations.
+6. Governed agent command API ✅
 7. **Production path**: retopo/LOD, texture pipeline, export qualification, game-engine packages.
 
 ## License
