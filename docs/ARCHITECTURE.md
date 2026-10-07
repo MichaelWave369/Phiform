@@ -203,3 +203,41 @@ phiform.production-receipt.v1
 The source artifact and edit graph remain unchanged. Production packs are derived outputs with their own qualification evidence.
 
 Native engine package formats are not implied by the Godot/Unreal profile names; those profiles currently define GLB-oriented budgets and LOD policies for downstream import.
+
+
+## Rung 8 — engine pack boundary
+
+Engine packs sit downstream of production qualification.
+
+```text
+editable source
+      |
+      v
+production profile
+      |
+      v
+qualified LOD candidates
+      |
+      +--> LOD GLBs
+      |
+      +--> LOD0 + collision proxies
+      |          |
+      |          +--> Godot -convcolonly names
+      |          +--> Unreal UBX_ names
+      |
+      v
+engine manifest + IMPORT.md
+      |
+      v
+deterministic ZIP structure
+      |
+      +--> per-file SHA-256
+      +--> package SHA-256
+      |
+      v
+phiform.engine-pack-receipt.v1
+```
+
+The engine package is a derived downstream artifact. It does not mutate the source artifact, edit graph, or production receipts.
+
+Native engine resources remain outside PhiForm's authority boundary in Rung 8.

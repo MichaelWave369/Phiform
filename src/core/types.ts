@@ -176,7 +176,7 @@ export interface PortableProjectV1 {
   glbBase64?: string
 }
 
-export type PortableProject = PortableProjectV4
+export type PortableProject = PortableProjectV5
 
 
 export interface AgentAuditFingerprint {
@@ -296,6 +296,74 @@ export interface PortableProjectV4 {
   editGraph: EditGraph
   agentReceipts: AgentAuditReceipt[]
   productionReceipts: ProductionReceipt[]
+  latestReceipt?: GenerationReceipt
+  glbBase64?: string
+}
+
+
+export type EngineTarget = 'godot' | 'unreal'
+export type CollisionProxyKind = 'box'
+
+export interface EnginePackFile {
+  path: string
+  role: 'import-scene' | 'lod' | 'manifest' | 'instructions'
+  byteLength: number
+  sha256: string
+}
+
+export interface EnginePackManifest {
+  schema: 'phiform.engine-pack.v1'
+  createdAt: string
+  engine: EngineTarget
+  sourceArtifactId: string
+  sourceNodeId: string
+  productionProfileId: ProductionProfileId
+  coordinates: {
+    standard: 'glTF 2.0'
+    handedness: 'right'
+    upAxis: '+Y'
+    forwardAxis: '+Z'
+    linearUnit: 'meter'
+  }
+  collision: {
+    kind: CollisionProxyKind
+    nodeNames: string[]
+    embeddedInImportScene: true
+  }
+  lods: Array<{
+    lod: number
+    path: string
+    ratio: number
+    triangles: number
+    sha256: string
+  }>
+  importScenePath: string
+  notes: string[]
+}
+
+export interface EnginePackReceipt {
+  schema: 'phiform.engine-pack-receipt.v1'
+  id: string
+  createdAt: string
+  engine: EngineTarget
+  sourceArtifactId: string
+  sourceNodeId: string
+  manifest: EnginePackManifest
+  files: EnginePackFile[]
+  packageFilename: string
+  packageByteLength: number
+  packageSha256: string
+}
+
+export interface PortableProjectV5 {
+  schema: 'phiform.project.v5'
+  savedAt: string
+  artifact: ModelArtifact
+  edits: WorkspaceEditState
+  editGraph: EditGraph
+  agentReceipts: AgentAuditReceipt[]
+  productionReceipts: ProductionReceipt[]
+  enginePackReceipts: EnginePackReceipt[]
   latestReceipt?: GenerationReceipt
   glbBase64?: string
 }

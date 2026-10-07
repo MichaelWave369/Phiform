@@ -1569,3 +1569,142 @@ textarea:focus {
   color: #77816e;
   font: 7px ui-monospace, SFMono-Regular, Menlo, monospace;
 }
+
+
+.engine-card {
+  margin-top: 16px;
+  padding: 13px;
+  border: 1px solid #3b3156;
+  border-radius: 10px;
+  background:
+    linear-gradient(150deg, rgba(88, 64, 140, 0.14), transparent 42%),
+    #090e13;
+}
+
+.engine-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.engine-head strong {
+  display: block;
+  color: #c8b6f4;
+  font-size: 10px;
+}
+
+.engine-head > span {
+  padding: 5px 7px;
+  border: 1px solid #4a3d68;
+  border-radius: 999px;
+  color: #8e7daf;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+}
+
+.engine-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 11px;
+}
+
+.engine-switch button {
+  padding: 8px;
+  border: 1px solid #352d48;
+  border-radius: 7px;
+  background: #100d17;
+  color: #77698f;
+  font-size: 8px;
+  letter-spacing: 0.09em;
+  cursor: pointer;
+}
+
+.engine-switch button.active {
+  border-color: #725ca0;
+  background: #191226;
+  color: #c2a9ea;
+}
+
+.engine-conventions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 9px;
+}
+
+.engine-conventions span {
+  padding: 5px 6px;
+  border: 1px solid #30293e;
+  border-radius: 5px;
+  color: #756b83;
+  font-size: 7px;
+  letter-spacing: 0.06em;
+}
+
+.engine-build {
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px;
+  border: 1px solid #6a5592;
+  border-radius: 7px;
+  background: #171020;
+  color: #c9afea;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.engine-build:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.engine-caveat {
+  margin: 8px 0 0;
+  color: #6e6677;
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.engine-receipt {
+  margin-top: 10px;
+  padding: 9px;
+  border: 1px solid #372e48;
+  border-radius: 7px;
+  background: #0d0a12;
+}
+
+.engine-receipt span,
+.engine-receipt strong,
+.engine-receipt small {
+  display: block;
+}
+
+.engine-receipt span {
+  color: #716486;
+  font-size: 7px;
+  letter-spacing: 0.09em;
+}
+
+.engine-receipt strong {
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #b9a6d4;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.engine-receipt small {
+  margin-top: 3px;
+  color: #6d6378;
+  font: 7px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.engine-receipt p {
+  margin: 5px 0 0;
+  color: #7d718c;
+  font: 7px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
