@@ -4,9 +4,9 @@
 
 > Neural systems may propose geometry. The workspace keeps editable state, provenance, and export authority.
 
-## Current state — v0.14 / Rung 14
+## Current state — v0.15 / Rung 15
 
-PhiForm now promotes validated derived GLBs into governed release candidates only when exact bytes, lineage receipts, validation evidence, current workspace identity, and explicit policy all agree.
+PhiForm now cryptographically attests governed release ZIPs with an operator-controlled Ed25519 key, binding authorization to the exact package hash without exposing the private key to the browser.
 
 ### Rung 1 — workbench foundation ✅
 React/TypeScript studio, Three.js viewport, adapter contract, proof generation, receipts.
@@ -162,6 +162,25 @@ Topology/attribute audit, conservative repair, Meshopt-backed LOD generation, pr
 - project v11 persistence of release receipts
 - CI refusal tests for stale lineage, forged bytes, policy violations, and failed validation
 
+### Rung 15 — cryptographic release attestations ✅
+- operator-controlled Ed25519 private key stays on localhost bridge
+- signer disabled unless key path + session token are configured
+- bearer-protected signing endpoint
+- constant-time token comparison
+- bridge re-hashes exact release ZIP bytes before signing
+- signed canonical release statement includes package hash, release receipt ID, artifact/node lineage, target, validation receipt, and policy
+- SHA-256 public-key fingerprint over SPKI DER
+- public key PEM included for independent verification
+- detached Ed25519 signature
+- local verification before bridge returns an attestation
+- identical statement yields deterministic Ed25519 signature
+- `phiform.release-attestation.v1`
+- independent `attestation:verify` CLI
+- `signer:init` local key/bootstrap helper
+- signing token remains session-only and is never persisted
+- project v12 persistence of public attestation evidence
+- CI uses a throwaway keypair and tests auth refusal, forged packages, and signature tampering
+
 ## Engine pack structure
 
 A typical pack looks like:
@@ -260,6 +279,20 @@ Local inference bridge:
 npm run bridge
 ```
 
+Initialize an optional local release signer:
+
+```bash
+npm run signer:init
+```
+
+Then set the printed `PHIFORM_RELEASE_SIGNING_KEY` and `PHIFORM_RELEASE_SIGNING_TOKEN` values in the shell that starts the bridge.
+
+Verify a detached attestation independently:
+
+```bash
+npm run attestation:verify -- release-attestation.json release.zip
+```
+
 ## Qualification
 
 ```bash
@@ -274,6 +307,7 @@ npm run basisu:contract
 npm run basisu:compact:contract
 npm run gltf:validation:contract
 npm run release:contract
+npm run attestation:contract
 npm run check
 npm run build
 ```
@@ -283,12 +317,12 @@ npm run build
 New saves use:
 
 ```text
-phiform.project.v11
+phiform.project.v12
 ```
 
-Project v11 preserves generation evidence, workspace state, edit lineage, agent receipts, production receipts, engine-pack receipts, texture qualification receipts, executed KTX2 receipts, BasisU-derived GLB receipts, compact BasisU receipts, glTF validation receipts, governed release receipts, and embedded source GLB bytes.
+Project v12 preserves generation evidence, workspace state, edit lineage, agent receipts, production receipts, engine-pack receipts, texture qualification receipts, executed KTX2 receipts, BasisU-derived GLB receipts, compact BasisU receipts, glTF validation receipts, governed release receipts, public release attestations, and embedded source GLB bytes.
 
-Project v1 through v10 remain importable. Migration never invents history for capabilities that did not exist yet.
+Project v1 through v11 remain importable. Migration never invents history for capabilities that did not exist yet.
 
 ## Documentation
 
@@ -307,10 +341,11 @@ Project v1 through v10 remain importable. Migration never invents history for ca
 - [Compact required-BasisU GLB](docs/BASISU_COMPACTION.md)
 - [glTF validation receipts](docs/GLTF_VALIDATION.md)
 - [Governed release candidates](docs/RELEASE_GATE.md)
+- [Release attestations](docs/RELEASE_ATTESTATION.md)
 
 ## Next
 
-Likely next production work includes visual texture error metrics, qualified manifold repair, better collision proxies, semantic retopology, signed release attestations, and engine-side validation of compact BasisU imports.
+Likely next production work includes visual texture error metrics, qualified manifold repair, better collision proxies, semantic retopology, trusted-key policies, transparency logs, and engine-side validation of compact BasisU imports.
 
 ## License
 
