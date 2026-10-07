@@ -52,6 +52,9 @@ import type {
   ProductionProfileId,
   ProductionReceipt,
   TextureAudit,
+  TextureEncoderCodec,
+  TextureEncoderDescriptor,
+  TextureEncodingReceipt,
   TextureProfileId,
   TextureReceipt,
   TransformMode,
@@ -77,7 +80,12 @@ import {
   type EnginePackInputFile,
 } from './engine/pack'
 import type { EngineRuntimeResult } from './engine/runtime'
-import { buildTextureReceipt } from './texture/audit'
+import {
+  buildTextureReceipt,
+  compressionPlan,
+} from './texture/audit'
+import { TextureEncoderClient } from './texture/encoderClient'
+import type { PreparedTexturePng } from './texture/sourcePng'
 
 const initialArtifact: ModelArtifact = {
   kind: 'primitive',
@@ -117,11 +125,44 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url)
 }
 
+const KTX2_MAGIC = [
+  0xab, 0x4b, 0x54, 0x58,
+  0x20, 0x32, 0x30, 0xbb,
+  0x0d, 0x0a, 0x1a, 0x0a,
+]
+
 async function sha256Blob(blob: Blob): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer())
   return [...new Uint8Array(digest)]
     .map((value) => value.toString(16).padStart(2, '0'))
     .join('')
+}
+
+async function verifyKtx2Blob(
+  blob: Blob,
+  expectedSha256: string,
+  expectedByteLength: number,
+): Promise<string> {
+  if (blob.size !== expectedByteLength) {
+    throw new Error(
+      `KTX2 byte length mismatch: expected ${expectedByteLength}, received ${blob.size}.`,
+    )
+  }
+
+  const header = new Uint8Array(await blob.slice(0, 12).arrayBuffer())
+  if (
+    header.length !== KTX2_MAGIC.length ||
+    !KTX2_MAGIC.every((value, index) => header[index] === value)
+  ) {
+    throw new Error('Returned texture artifact failed the KTX2 identifier check.')
+  }
+
+  const actualSha256 = await sha256Blob(blob)
+  if (actualSha256 !== expectedSha256) {
+    throw new Error('Browser SHA-256 did not match the bridge KTX2 hash.')
+  }
+
+  return actualSha256
 }
 
 function derivedId(): string {
@@ -186,6 +227,14 @@ export function App() {
     useState<TextureProfileId>('game-textures')
   const [textureAudit, setTextureAudit] = useState<TextureAudit | undefined>()
   const [textureReceipts, setTextureReceipts] = useState<TextureReceipt[]>([])
+  const [textureEncoder, setTextureEncoder] =
+    useState<TextureEncoderDescriptor | undefined>()
+  const [textureEncoderStatus, setTextureEncoderStatus] =
+    useState<'idle' | 'checking' | 'online' | 'error'>('idle')
+  const [textureEncodeRequest, setTextureEncodeRequest] = useState(0)
+  const [textureEncodingBusy, setTextureEncodingBusy] = useState(false)
+  const [textureEncodingReceipts, setTextureEncodingReceipts] =
+    useState<TextureEncodingReceipt[]>([])
   const importRef = useRef<HTMLInputElement>(null)
   const agentStateRef = useRef<AgentWorkspaceState>({
     artifact: initialArtifact,
@@ -350,6 +399,7 @@ export function App() {
       setProductionAudit(undefined)
       setEnginePackReceipts([])
       setTextureReceipts([])
+      setTextureEncodingReceipts([])
       setTextureAudit(undefined)
       setProjectStatus('')
     } catch (cause) {
@@ -471,6 +521,7 @@ export function App() {
         productionReceipts,
         enginePackReceipts,
         textureReceipts,
+        textureEncodingReceipts,
         latestReceipt,
       )
       setProjectStatus('SAVED LOCALLY')
@@ -492,6 +543,7 @@ export function App() {
     setProductionReceipts(project.productionReceipts)
     setEnginePackReceipts(project.enginePackReceipts)
     setTextureReceipts(project.textureReceipts)
+    setTextureEncodingReceipts(project.textureEncodingReceipts)
     setProductionAudit(undefined)
     setTextureAudit(undefined)
     setMeshTargets([])
@@ -523,10 +575,11 @@ export function App() {
         productionReceipts,
         enginePackReceipts,
         textureReceipts,
+        textureEncodingReceipts,
         latestReceipt,
       )
       downloadPortableProject(project)
-      setProjectStatus('PROJECT V6 EXPORTED')
+      setProjectStatus('PROJECT V7 EXPORTED')
     } catch (cause) {
       setProjectStatus('')
       setError(cause instanceof Error ? cause.message : 'Project export failed.')
@@ -544,6 +597,236 @@ export function App() {
     } catch (cause) {
       setProjectStatus('')
       setError(cause instanceof Error ? cause.message : 'Project import failed.')
+    }
+  }
+
+  const probeTextureEncoder = async () => {
+    setTextureEncoderStatus('checking')
+    setError('')
+    try {
+      const descriptor = await new TextureEncoderClient(endpoint).descriptor()
+      setTextureEncoder(descriptor)
+      setTextureEncoderStatus(descriptor.available ? 'online' : 'error')
+      if (!descriptor.available) {
+        setError(
+          descriptor.statusReason ||
+          'Khronos KTX encoder is unavailable on the local bridge.',
+        )
+      }
+    } catch (cause) {
+      setTextureEncoder(undefined)
+      setTextureEncoderStatus('error')
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Texture encoder probe failed.',
+      )
+    }
+  }
+
+  const beginTextureEncoding = async () => {
+    setError('')
+    try {
+      if (!textureAudit) {
+        throw new Error('No texture audit is available for the current scene.')
+      }
+      if (textureAudit.qualification === 'fail') {
+        throw new Error(
+          'Texture encoding is blocked while the current audit is FAIL.',
+        )
+      }
+      if (textureAudit.totals.textures === 0) {
+        throw new Error('The current scene has no texture maps to encode.')
+      }
+
+      const descriptor = await new TextureEncoderClient(endpoint).descriptor()
+      setTextureEncoder(descriptor)
+      setTextureEncoderStatus(descriptor.available ? 'online' : 'error')
+      if (!descriptor.available) {
+        throw new Error(
+          descriptor.statusReason ||
+          'Khronos KTX encoder is unavailable on the local bridge.',
+        )
+      }
+
+      setTextureEncodingBusy(true)
+      setProjectStatus('PREPARING TEXTURE SOURCES…')
+      setTextureEncodeRequest((value) => value + 1)
+    } catch (cause) {
+      setTextureEncodingBusy(false)
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Texture encoding could not start.',
+      )
+    }
+  }
+
+  const handleTextureSourcesReady = async (
+    audit: TextureAudit,
+    sources: PreparedTexturePng[],
+  ) => {
+    setError('')
+    try {
+      if (sources.length === 0) {
+        throw new Error('No browser-readable texture sources were prepared.')
+      }
+
+      const client = new TextureEncoderClient(endpoint)
+      const plan = compressionPlan(audit)
+      const completed: Array<{
+        source: PreparedTexturePng
+        blob: Blob
+        artifact: TextureEncodingReceipt['artifacts'][number]
+        encoderVersion: string
+      }> = []
+
+      for (let index = 0; index < sources.length; index += 1) {
+        const source = sources[index]
+        const planned = plan.find(
+          (entry) => entry.textureId === source.textureId,
+        )
+        if (!planned) {
+          throw new Error(
+            `No compression plan exists for texture ${source.name}.`,
+          )
+        }
+
+        const codec: TextureEncoderCodec =
+          planned.mode === 'uastc'
+            ? 'uastc-ldr-4x4'
+            : 'basis-lz'
+
+        setProjectStatus(
+          `ENCODING TEXTURE ${index + 1}/${sources.length} · ${codec}`,
+        )
+
+        const submitted = await client.submit(
+          source.textureId,
+          source.blob,
+          source.sha256,
+          codec,
+          source.colorSpace,
+        )
+        const job = await client.waitForJob(submitted.id)
+
+        if (!job.artifact || !job.encoder) {
+          throw new Error(
+            `Texture job ${job.id} completed without artifact evidence.`,
+          )
+        }
+        if (
+          job.sourceSha256 !== source.sha256 ||
+          job.sourceByteLength !== source.blob.size
+        ) {
+          throw new Error(
+            `Bridge source evidence changed for texture ${source.name}.`,
+          )
+        }
+
+        const blob = await client.artifact(job)
+        const browserHash = await verifyKtx2Blob(
+          blob,
+          job.artifact.sha256,
+          job.artifact.byteLength,
+        )
+        const outputFilename =
+          `${safeName(source.name)}-${source.textureId.slice(0, 8)}-` +
+          `${codec === 'basis-lz' ? 'etc1s' : 'uastc'}.ktx2`
+
+        completed.push({
+          source,
+          blob,
+          encoderVersion: job.encoder.version,
+          artifact: {
+            textureId: source.textureId,
+            name: source.name,
+            roles: [...source.roles],
+            codec,
+            sourcePngSha256: source.sha256,
+            sourcePngByteLength: source.blob.size,
+            outputSha256: browserHash,
+            outputByteLength: blob.size,
+            outputFilename,
+            compressionRatio:
+              source.blob.size / Math.max(blob.size, 1),
+            browserHashVerified: true,
+          },
+        })
+      }
+
+      const encoderVersions = new Set(
+        completed.map((entry) => entry.encoderVersion),
+      )
+      if (encoderVersions.size !== 1) {
+        throw new Error(
+          'Texture batch crossed encoder versions; refusing one mixed receipt.',
+        )
+      }
+
+      const totalSourcePngBytes = completed.reduce(
+        (sum, entry) => sum + entry.source.blob.size,
+        0,
+      )
+      const totalOutputBytes = completed.reduce(
+        (sum, entry) => sum + entry.blob.size,
+        0,
+      )
+
+      const receipt: TextureEncodingReceipt = {
+        schema: 'phiform.texture-encode-receipt.v1',
+        id:
+          `texture-encode-receipt-` +
+          (crypto.randomUUID?.() ?? Date.now().toString(36)),
+        createdAt: new Date().toISOString(),
+        sourceArtifactId: artifact.id,
+        sourceNodeId: editGraph.currentNodeId,
+        profileId: audit.profileId,
+        encoderId: 'khronos.ktx.v1',
+        encoderVersion: [...encoderVersions][0] ?? 'unknown',
+        compressionExecuted: true,
+        allOutputsValidated: true,
+        totalSourcePngBytes,
+        totalOutputBytes,
+        aggregateCompressionRatio:
+          totalSourcePngBytes / Math.max(totalOutputBytes, 1),
+        artifacts: completed.map((entry) => entry.artifact),
+        notes: [
+          'All KTX2 files were emitted by the configured Khronos KTX Software executable.',
+          'Every output passed KTX2 identifier, byte-length, bridge SHA-256, and independent browser SHA-256 validation.',
+          'Compression ratio compares browser-normalized PNG bytes with returned KTX2 bytes; it is not a comparison against the original embedded image payload.',
+          'A full mip pyramid was requested during KTX creation.',
+          'Rung 10 does not rewrite the source GLB to KHR_texture_basisu bindings.',
+          'Basis encoding may differ bit-for-bit across platforms; this receipt binds the exact bytes returned by this execution.',
+        ],
+      }
+
+      for (const entry of completed) {
+        downloadBlob(entry.blob, entry.artifact.outputFilename)
+      }
+
+      setTextureEncodingReceipts((current) =>
+        [...current, receipt].slice(-50),
+      )
+      downloadBlob(
+        new Blob([JSON.stringify(receipt, null, 2)], {
+          type: 'application/json',
+        }),
+        `${safeName(artifact.label)}-${audit.profileId}-ktx2-executed.json`,
+      )
+      setProjectStatus(
+        `KTX2 EXECUTED · ${completed.length} TEXTURES · ` +
+        `${receipt.aggregateCompressionRatio.toFixed(2)}× PNG/KTX2`,
+      )
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Texture encoding failed.',
+      )
+      setProjectStatus('')
+    } finally {
+      setTextureEncodingBusy(false)
     }
   }
 
@@ -828,7 +1111,7 @@ export function App() {
         </div>
 
         <div className="top-status">
-          <span className="pill"><i /> RUNG 9</span>
+          <span className="pill"><i /> RUNG 10</span>
           <span className="pill muted">
             {editGraph.currentBranch} · {dirty ? 'WORKING TREE DIRTY' : 'COMMITTED'}
           </span>
@@ -946,6 +1229,7 @@ export function App() {
             engineTarget={engineTarget}
             engineRequest={engineRequest}
             textureProfileId={textureProfileId}
+            textureEncodeRequest={textureEncodeRequest}
             onSelectedChange={setSelected}
             onTargetChange={setTarget}
             onMeshTargetsChange={setMeshTargets}
@@ -953,6 +1237,9 @@ export function App() {
             onStatsChange={setMeshStats}
             onProductionAuditChange={setProductionAudit}
             onTextureAuditChange={setTextureAudit}
+            onTextureSourcesReady={(audit, sources) => {
+              void handleTextureSourcesReady(audit, sources)
+            }}
             onExportComplete={(blob) => { void handleEditedExport(blob) }}
             onProductionComplete={(result) => { void handleProductionComplete(result) }}
             onEngineComplete={(result) => { void handleEngineComplete(result) }}
@@ -960,6 +1247,7 @@ export function App() {
               setError(message)
               setProductionBusy(false)
               setEngineBusy(false)
+              setTextureEncodingBusy(false)
             }}
           />
 
@@ -997,6 +1285,7 @@ export function App() {
             <div><span>PROD RECEIPTS</span><strong>{productionReceipts.length}</strong></div>
             <div><span>ENGINE PACKS</span><strong>{enginePackReceipts.length}</strong></div>
             <div><span>TEXTURE RECEIPTS</span><strong>{textureReceipts.length}</strong></div>
+            <div><span>KTX2 EXECUTED</span><strong>{textureEncodingReceipts.length}</strong></div>
           </div>
 
           <div className="editor-card">
@@ -1212,8 +1501,14 @@ export function App() {
             profileId={textureProfileId}
             audit={textureAudit}
             receipts={textureReceipts}
+            encodingReceipts={textureEncodingReceipts}
+            encoder={textureEncoder}
+            encoderStatus={textureEncoderStatus}
+            encodingBusy={textureEncodingBusy}
             onProfileChange={setTextureProfileId}
             onRecord={recordTextureQualification}
+            onProbeEncoder={() => { void probeTextureEncoder() }}
+            onExecuteEncoding={() => { void beginTextureEncoding() }}
           />
 
           <EnginePackPanel
@@ -1283,10 +1578,11 @@ export function App() {
           </div>
 
           <div className="authority-note">
-            <span>PLAN ≠ COMPRESSION</span>
+            <span>EXECUTED = BYTES + EVIDENCE</span>
             <p>
-              Texture receipts qualify dimensions, roles, color space, packing, and GPU
-              memory. KTX2/Basis entries remain planned until encoded bytes actually exist.
+              Rung 10 only records executed compression after the local Khronos encoder
+              returns KTX2 bytes and the browser independently validates their identity,
+              length, and SHA-256. The source GLB is still not rewritten automatically.
             </p>
           </div>
         </aside>
