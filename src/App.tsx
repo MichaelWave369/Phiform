@@ -39,6 +39,7 @@ import {
 } from './core/projectStore'
 import { receiptChecksum, receiptText } from './core/receipt'
 import type {
+  BasisuDerivedReceipt,
   DerivedArtifactLineage,
   EditTarget,
   EnginePackReceipt,
@@ -86,6 +87,17 @@ import {
 } from './texture/audit'
 import { TextureEncoderClient } from './texture/encoderClient'
 import type { PreparedTexturePng } from './texture/sourcePng'
+import {
+  rewriteGlbWithBasisu,
+  type VerifiedKtx2Payload,
+} from './gltf/basisuGlb'
+
+interface SessionKtx2Payload {
+  textureId: string
+  textureName: string
+  sha256: string
+  blob: Blob
+}
 
 const initialArtifact: ModelArtifact = {
   kind: 'primitive',
@@ -235,6 +247,12 @@ export function App() {
   const [textureEncodingBusy, setTextureEncodingBusy] = useState(false)
   const [textureEncodingReceipts, setTextureEncodingReceipts] =
     useState<TextureEncodingReceipt[]>([])
+  const [sessionKtx2Payloads, setSessionKtx2Payloads] =
+    useState<SessionKtx2Payload[]>([])
+  const [basisuGlbRequest, setBasisuGlbRequest] = useState(0)
+  const [basisuBusy, setBasisuBusy] = useState(false)
+  const [basisuDerivedReceipts, setBasisuDerivedReceipts] =
+    useState<BasisuDerivedReceipt[]>([])
   const importRef = useRef<HTMLInputElement>(null)
   const agentStateRef = useRef<AgentWorkspaceState>({
     artifact: initialArtifact,
@@ -400,6 +418,8 @@ export function App() {
       setEnginePackReceipts([])
       setTextureReceipts([])
       setTextureEncodingReceipts([])
+      setSessionKtx2Payloads([])
+      setBasisuDerivedReceipts([])
       setTextureAudit(undefined)
       setProjectStatus('')
     } catch (cause) {
@@ -522,6 +542,7 @@ export function App() {
         enginePackReceipts,
         textureReceipts,
         textureEncodingReceipts,
+        basisuDerivedReceipts,
         latestReceipt,
       )
       setProjectStatus('SAVED LOCALLY')
@@ -544,6 +565,8 @@ export function App() {
     setEnginePackReceipts(project.enginePackReceipts)
     setTextureReceipts(project.textureReceipts)
     setTextureEncodingReceipts(project.textureEncodingReceipts)
+    setBasisuDerivedReceipts(project.basisuDerivedReceipts)
+    setSessionKtx2Payloads([])
     setProductionAudit(undefined)
     setTextureAudit(undefined)
     setMeshTargets([])
@@ -576,10 +599,11 @@ export function App() {
         enginePackReceipts,
         textureReceipts,
         textureEncodingReceipts,
+        basisuDerivedReceipts,
         latestReceipt,
       )
       downloadPortableProject(project)
-      setProjectStatus('PROJECT V7 EXPORTED')
+      setProjectStatus('PROJECT V8 EXPORTED')
     } catch (cause) {
       setProjectStatus('')
       setError(cause instanceof Error ? cause.message : 'Project export failed.')
@@ -808,6 +832,14 @@ export function App() {
       setTextureEncodingReceipts((current) =>
         [...current, receipt].slice(-50),
       )
+      setSessionKtx2Payloads(
+        completed.map((entry) => ({
+          textureId: entry.artifact.textureId,
+          textureName: entry.artifact.name,
+          sha256: entry.artifact.outputSha256,
+          blob: entry.blob,
+        })),
+      )
       downloadBlob(
         new Blob([JSON.stringify(receipt, null, 2)], {
           type: 'application/json',
@@ -827,6 +859,200 @@ export function App() {
       setProjectStatus('')
     } finally {
       setTextureEncodingBusy(false)
+    }
+  }
+
+  const beginBasisuDerivedGlb = () => {
+    setError('')
+    try {
+      const encoding = textureEncodingReceipts.at(-1)
+      if (!encoding) {
+        throw new Error(
+          'Run executed KTX2 compression before building a BasisU GLB.',
+        )
+      }
+      if (
+        encoding.sourceArtifactId !== artifact.id ||
+        encoding.sourceNodeId !== editGraph.currentNodeId
+      ) {
+        throw new Error(
+          'The latest KTX2 receipt belongs to a different artifact or edit-graph node. Re-run texture encoding for the current state.',
+        )
+      }
+      if (
+        sessionKtx2Payloads.length !== encoding.artifacts.length ||
+        sessionKtx2Payloads.length === 0
+      ) {
+        throw new Error(
+          'The verified KTX2 bytes are not available in this browser session. Re-run executed texture encoding before deriving the GLB.',
+        )
+      }
+      if (!textureAudit) {
+        throw new Error('No current texture audit is available.')
+      }
+
+      const encodedIds = new Set(
+        encoding.artifacts.map((entry) => entry.textureId),
+      )
+      const incompatible = textureAudit.textures.filter(
+        (entry) =>
+          encodedIds.has(entry.id) &&
+          (
+            entry.width <= 0 ||
+            entry.height <= 0 ||
+            entry.width % 4 !== 0 ||
+            entry.height % 4 !== 0
+          ),
+      )
+      if (incompatible.length > 0) {
+        throw new Error(
+          'KHR_texture_basisu requires texture dimensions divisible by 4. Re-author or resize: ' +
+          incompatible.map((entry) =>
+            `${entry.name} (${entry.width}×${entry.height})`
+          ).join(', '),
+        )
+      }
+
+      setBasisuBusy(true)
+      setProjectStatus('EXPORTING BASISU SOURCE GLB…')
+      setBasisuGlbRequest((value) => value + 1)
+    } catch (cause) {
+      setBasisuBusy(false)
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'BasisU GLB derivation could not start.',
+      )
+    }
+  }
+
+  const handleBasisuSourceGlbReady = async (sourceGlb: Blob) => {
+    setError('')
+    try {
+      const encoding = textureEncodingReceipts.at(-1)
+      if (!encoding) {
+        throw new Error('Executed KTX2 receipt disappeared before GLB rewrite.')
+      }
+
+      const sourceBytes = new Uint8Array(await sourceGlb.arrayBuffer())
+      const sourceGlbSha256 = await sha256Blob(sourceGlb)
+      const verifiedPayloads: VerifiedKtx2Payload[] = []
+
+      for (const payload of sessionKtx2Payloads) {
+        const expected = encoding.artifacts.find(
+          (entry) => entry.textureId === payload.textureId,
+        )
+        if (!expected) {
+          throw new Error(
+            `Session KTX2 payload ${payload.textureName} is not present in the executed receipt.`,
+          )
+        }
+        if (
+          payload.sha256 !== expected.outputSha256 ||
+          payload.blob.size !== expected.outputByteLength
+        ) {
+          throw new Error(
+            `Session KTX2 evidence changed for ${payload.textureName}.`,
+          )
+        }
+        const actual = await verifyKtx2Blob(
+          payload.blob,
+          expected.outputSha256,
+          expected.outputByteLength,
+        )
+        verifiedPayloads.push({
+          textureId: payload.textureId,
+          textureName: payload.textureName,
+          sha256: actual,
+          bytes: new Uint8Array(await payload.blob.arrayBuffer()),
+        })
+      }
+
+      const rewritten = rewriteGlbWithBasisu(
+        sourceBytes,
+        verifiedPayloads,
+      )
+      const outputBuffer = Uint8Array.from(rewritten.bytes).buffer
+      const outputBlob = new Blob(
+        [outputBuffer],
+        { type: 'model/gltf-binary' },
+      )
+      const outputGlbSha256 = await sha256Blob(outputBlob)
+
+      const boundIds = new Set(
+        rewritten.bindings.map((entry) => entry.textureId),
+      )
+      const unboundExecutedTextureIds = verifiedPayloads
+        .map((entry) => entry.textureId)
+        .filter((textureId) => !boundIds.has(textureId))
+
+      const outputFilename =
+        `${safeName(artifact.label)}-basisu-fallback.glb`
+      const receipt: BasisuDerivedReceipt = {
+        schema: 'phiform.basisu-derived-receipt.v1',
+        id:
+          `basisu-derived-receipt-` +
+          (crypto.randomUUID?.() ?? Date.now().toString(36)),
+        createdAt: new Date().toISOString(),
+        sourceArtifactId: artifact.id,
+        sourceNodeId: editGraph.currentNodeId,
+        sourceEncodingReceiptId: encoding.id,
+        outputFilename,
+        sourceGlbSha256,
+        sourceGlbByteLength: sourceGlb.size,
+        outputGlbSha256,
+        outputGlbByteLength: outputBlob.size,
+        extensionUsed: 'KHR_texture_basisu',
+        extensionRequired: false,
+        bindingCoverage:
+          unboundExecutedTextureIds.length === 0 &&
+          rewritten.fallbackOnlyTextureNames.length === 0
+            ? 'full'
+            : 'partial',
+        boundTextureCount: rewritten.bindings.length,
+        fallbackOnlyTextureCount:
+          rewritten.fallbackOnlyTextureNames.length,
+        unboundExecutedTextureCount:
+          unboundExecutedTextureIds.length,
+        bindings: rewritten.bindings,
+        fallbackOnlyTextureNames:
+          rewritten.fallbackOnlyTextureNames,
+        unboundExecutedTextureIds,
+        notes: [
+          'Derived GLB preserves original PNG/JPEG image sources as fallbacks.',
+          'KHR_texture_basisu is listed in extensionsUsed but not extensionsRequired.',
+          'Verified KTX2 payloads are embedded as image/ktx2 buffer views.',
+          'Original workspace artifact is not mutated by this derived export.',
+          'Rung 11 does not strip fallback image payloads, so the derived GLB may be larger than the source GLB.',
+        ],
+      }
+
+      setBasisuDerivedReceipts((current) =>
+        [...current, receipt].slice(-50),
+      )
+
+      downloadBlob(outputBlob, outputFilename)
+      downloadBlob(
+        new Blob([JSON.stringify(receipt, null, 2)], {
+          type: 'application/json',
+        }),
+        `${safeName(artifact.label)}-basisu-derived-receipt.json`,
+      )
+
+      setProjectStatus(
+        `BASISU GLB ${receipt.bindingCoverage.toUpperCase()} · ` +
+        `${receipt.boundTextureCount} BOUND · ` +
+        `${receipt.fallbackOnlyTextureCount} FALLBACK-ONLY`,
+      )
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'BasisU GLB rewrite failed.',
+      )
+      setProjectStatus('')
+    } finally {
+      setBasisuBusy(false)
     }
   }
 
@@ -1111,7 +1337,7 @@ export function App() {
         </div>
 
         <div className="top-status">
-          <span className="pill"><i /> RUNG 10</span>
+          <span className="pill"><i /> RUNG 11</span>
           <span className="pill muted">
             {editGraph.currentBranch} · {dirty ? 'WORKING TREE DIRTY' : 'COMMITTED'}
           </span>
@@ -1230,6 +1456,7 @@ export function App() {
             engineRequest={engineRequest}
             textureProfileId={textureProfileId}
             textureEncodeRequest={textureEncodeRequest}
+            basisuGlbRequest={basisuGlbRequest}
             onSelectedChange={setSelected}
             onTargetChange={setTarget}
             onMeshTargetsChange={setMeshTargets}
@@ -1240,6 +1467,9 @@ export function App() {
             onTextureSourcesReady={(audit, sources) => {
               void handleTextureSourcesReady(audit, sources)
             }}
+            onBasisuSourceGlbReady={(blob) => {
+              void handleBasisuSourceGlbReady(blob)
+            }}
             onExportComplete={(blob) => { void handleEditedExport(blob) }}
             onProductionComplete={(result) => { void handleProductionComplete(result) }}
             onEngineComplete={(result) => { void handleEngineComplete(result) }}
@@ -1248,6 +1478,7 @@ export function App() {
               setProductionBusy(false)
               setEngineBusy(false)
               setTextureEncodingBusy(false)
+              setBasisuBusy(false)
             }}
           />
 
@@ -1286,6 +1517,7 @@ export function App() {
             <div><span>ENGINE PACKS</span><strong>{enginePackReceipts.length}</strong></div>
             <div><span>TEXTURE RECEIPTS</span><strong>{textureReceipts.length}</strong></div>
             <div><span>KTX2 EXECUTED</span><strong>{textureEncodingReceipts.length}</strong></div>
+            <div><span>BASISU GLBS</span><strong>{basisuDerivedReceipts.length}</strong></div>
           </div>
 
           <div className="editor-card">
@@ -1505,10 +1737,18 @@ export function App() {
             encoder={textureEncoder}
             encoderStatus={textureEncoderStatus}
             encodingBusy={textureEncodingBusy}
+            basisuBusy={basisuBusy}
+            basisuReceipts={basisuDerivedReceipts}
+            basisuSessionReady={
+              sessionKtx2Payloads.length > 0 &&
+              sessionKtx2Payloads.length ===
+                (textureEncodingReceipts.at(-1)?.artifacts.length ?? -1)
+            }
             onProfileChange={setTextureProfileId}
             onRecord={recordTextureQualification}
             onProbeEncoder={() => { void probeTextureEncoder() }}
             onExecuteEncoding={() => { void beginTextureEncoding() }}
+            onBuildBasisuGlb={beginBasisuDerivedGlb}
           />
 
           <EnginePackPanel
@@ -1578,11 +1818,11 @@ export function App() {
           </div>
 
           <div className="authority-note">
-            <span>EXECUTED = BYTES + EVIDENCE</span>
+            <span>DERIVED ≠ SOURCE MUTATION</span>
             <p>
-              Rung 10 only records executed compression after the local Khronos encoder
-              returns KTX2 bytes and the browser independently validates their identity,
-              length, and SHA-256. The source GLB is still not rewritten automatically.
+              Rung 11 embeds verified KTX2 payloads through KHR_texture_basisu into a
+              new fallback-bearing GLB. Original image sources and the editable workspace
+              remain untouched.
             </p>
           </div>
         </aside>
