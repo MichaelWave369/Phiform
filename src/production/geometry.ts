@@ -367,10 +367,12 @@ async function simplifyObject(
     if (removeCount <= 0) return
 
     tasks.push(
-      modifier.modify(child.geometry, removeCount).then((simplified) => {
-        child.geometry.dispose()
-        child.geometry = simplified
-      }),
+      Promise.resolve(modifier.modify(child.geometry, removeCount)).then(
+        (simplified: THREE.BufferGeometry) => {
+          child.geometry.dispose()
+          child.geometry = simplified
+        },
+      ),
     )
   })
 
