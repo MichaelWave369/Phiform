@@ -2183,3 +2183,77 @@ textarea:focus {
   color: #83778f;
   font: 7px ui-monospace, SFMono-Regular, Menlo, monospace;
 }
+
+
+.basisu-compact {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid #5b4b32;
+  border-radius: 8px;
+  background:
+    linear-gradient(150deg, rgba(150, 112, 55, 0.1), transparent 55%),
+    #120f0a;
+}
+
+.basisu-compact button {
+  width: 100%;
+  margin-top: 9px;
+  padding: 9px;
+  border: 1px solid #80683f;
+  border-radius: 7px;
+  background: #1c160d;
+  color: #dfc28a;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.basisu-compact button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.basisu-compact p {
+  margin: 7px 0 0;
+  color: #81735d;
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.basisu-compact-receipt {
+  margin-top: 8px;
+  padding: 9px;
+  border: 1px solid #5a4a30;
+  border-radius: 7px;
+  background: #120f09;
+}
+
+.basisu-compact-receipt span,
+.basisu-compact-receipt strong,
+.basisu-compact-receipt small {
+  display: block;
+}
+
+.basisu-compact-receipt span {
+  color: #8a7654;
+  font-size: 7px;
+  letter-spacing: 0.09em;
+}
+
+.basisu-compact-receipt strong {
+  margin-top: 4px;
+  color: #dbc18f;
+  font-size: 9px;
+}
+
+.basisu-compact-receipt small {
+  margin-top: 3px;
+  color: #82745f;
+  font: 7px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.basisu-compact-receipt p {
+  margin: 5px 0 0;
+  color: #927f62;
+  font: 7px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
