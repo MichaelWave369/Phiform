@@ -69,7 +69,7 @@ function finiteAttribute(
 }
 
 function materialForIndexOffset(
-  groups: readonly THREE.Group[],
+  groups: readonly { start: number; count: number; materialIndex?: number }[],
   offset: number,
 ): number {
   const group = groups.find(
