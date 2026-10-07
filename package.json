@@ -1,6 +1,6 @@
 {
   "name": "phiform",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,12 +13,14 @@
     "check": "tsc --noEmit --pretty false",
     "preview": "vite preview",
     "agent:contract": "tsx scripts/agent-command-check.ts",
-    "production:contract": "tsx scripts/production-geometry-check.ts"
+    "production:contract": "tsx scripts/production-geometry-check.ts",
+    "engine:contract": "tsx scripts/engine-pack-check.ts"
   },
   "dependencies": {
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "three": "^0.180.0"
+    "three": "^0.180.0",
+    "fflate": "^0.8.2"
   },
   "devDependencies": {
     "@types/react": "^19.1.16",
