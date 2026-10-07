@@ -4,9 +4,9 @@
 
 > Neural systems may propose geometry. The workspace keeps editable state, provenance, and export authority.
 
-## Current state — v0.9 / Rung 9
+## Current state — v0.10 / Rung 10
 
-PhiForm now qualifies the texture/material side of those assets too: PBR roles, color-space expectations, dimension budgets, packed maps, and estimated GPU memory.
+PhiForm now closes the planned-vs-executed texture gap by driving an operator-installed Khronos KTX encoder and recording the exact KTX2/Basis bytes it returns.
 
 ### Rung 1 — workbench foundation ✅
 React/TypeScript studio, Three.js viewport, adapter contract, proof generation, receipts.
@@ -66,6 +66,24 @@ Topology/attribute audit, conservative repair, Meshopt-backed LOD generation, pr
 - `phiform.texture-receipt.v1`
 - project v6 persistence of texture receipts
 - CI qualification for deduplication, ORM packing, policy warnings, color-space conflicts, and compression-plan semantics
+
+### Rung 10 — executed KTX2 / Basis compression ✅
+- operator-probed Khronos KTX Software backend
+- `PHIFORM_KTX_BIN` override with PATH fallback to `ktx`
+- browser-normalized PNG sources from audited 8-bit LDR textures
+- role-derived sRGB / linear transfer semantics
+- ETC1S / BasisLZ execution for compact color/scalar maps
+- UASTC LDR 4x4 + RDO + Zstd execution for normal/height-detail maps
+- full mip pyramid requested during KTX creation
+- guarded temp-directory execution with fixed codec allowlist
+- source PNG SHA-256 verified by the bridge
+- KTX2 output identifier validation before hashing
+- bridge SHA-256 over exact returned KTX2 bytes
+- independent browser SHA-256 verification
+- batch receipt emitted only after every texture validates
+- `phiform.texture-encode-receipt.v1`
+- project v7 persistence of executed texture receipts
+- CI fixture verifies CLI arguments and bridge lifecycle without claiming a real codec run
 
 ## Engine pack structure
 
@@ -174,6 +192,7 @@ npm run agent:contract
 npm run production:contract
 npm run engine:contract
 npm run texture:contract
+npm run texture:encode:contract
 npm run check
 npm run build
 ```
@@ -183,12 +202,12 @@ npm run build
 New saves use:
 
 ```text
-phiform.project.v6
+phiform.project.v7
 ```
 
-Project v6 preserves generation evidence, workspace state, edit lineage, agent receipts, production receipts, engine-pack receipts, texture receipts, and embedded source GLB bytes.
+Project v7 preserves generation evidence, workspace state, edit lineage, agent receipts, production receipts, engine-pack receipts, texture qualification receipts, executed KTX2 receipts, and embedded source GLB bytes.
 
-Project v1 through v5 remain importable. Migration never invents history for capabilities that did not exist yet.
+Project v1 through v6 remain importable. Migration never invents history for capabilities that did not exist yet.
 
 ## Documentation
 
@@ -202,10 +221,11 @@ Project v1 through v5 remain importable. Migration never invents history for cap
 - [Production geometry](docs/PRODUCTION.md)
 - [Engine asset packs](docs/ENGINE_PACKS.md)
 - [Texture + material qualification](docs/TEXTURES.md)
+- [Executed KTX2 / Basis encoding](docs/KTX2_ENCODING.md)
 
 ## Next
 
-Likely next production rungs are actual KTX2/Basis encoding, qualified manifold repair, better collision proxies, and semantic retopology.
+The next texture rung can rebind verified KTX2 outputs into derived glTF/GLB assets using `KHR_texture_basisu`; other production work includes qualified manifold repair, better collision proxies, and semantic retopology.
 
 ## License
 
