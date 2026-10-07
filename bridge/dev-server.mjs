@@ -70,6 +70,7 @@ function publicTextureJob(job) {
     id: job.id,
     textureId: job.textureId,
     codec: job.codec,
+    colorSpace: job.colorSpace,
     status: job.status,
     createdAt: job.createdAt,
     sourceSha256: job.sourceSha256,
@@ -97,7 +98,11 @@ function publicTextureJob(job) {
 async function executeTextureJob(job, source) {
   job.status = 'running'
   try {
-    const result = await textureEncoder.encode(source, job.codec)
+    const result = await textureEncoder.encode(
+      source,
+      job.codec,
+      job.colorSpace,
+    )
     job.buffer = result.buffer
     job.sha256 = createHash('sha256').update(result.buffer).digest('hex')
     job.encoderVersion = result.version
@@ -183,14 +188,17 @@ const server = createServer(async (req, res) => {
       if (
         typeof body.textureId !== 'string' ||
         !body.textureId ||
-        typeof body.sourceKtx2Base64 !== 'string' ||
-        !body.sourceKtx2Base64
+        typeof body.sourcePngBase64 !== 'string' ||
+        !body.sourcePngBase64 ||
+        (body.colorSpace !== 'srgb' && body.colorSpace !== 'linear')
       ) {
-        json(res, 400, { error: 'textureId and sourceKtx2Base64 are required' })
+        json(res, 400, {
+          error: 'textureId, sourcePngBase64, and srgb/linear colorSpace are required',
+        })
         return
       }
 
-      const source = Buffer.from(body.sourceKtx2Base64, 'base64')
+      const source = Buffer.from(body.sourcePngBase64, 'base64')
       const sourceSha256 = createHash('sha256').update(source).digest('hex')
 
       if (
@@ -214,6 +222,7 @@ const server = createServer(async (req, res) => {
         buffer: Buffer.alloc(0),
         sha256: '',
         encoderVersion: descriptor.version || 'unknown',
+        colorSpace: body.colorSpace === 'srgb' ? 'srgb' : 'linear',
         notes: [],
       }
 
