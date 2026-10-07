@@ -176,7 +176,7 @@ export interface PortableProjectV1 {
   glbBase64?: string
 }
 
-export type PortableProject = PortableProjectV9
+export type PortableProject = PortableProjectV10
 
 
 export interface AgentAuditFingerprint {
@@ -619,6 +619,75 @@ export interface PortableProjectV9 {
   textureEncodingReceipts: TextureEncodingReceipt[]
   basisuDerivedReceipts: BasisuDerivedReceipt[]
   basisuCompactReceipts: BasisuCompactReceipt[]
+  latestReceipt?: GenerationReceipt
+  glbBase64?: string
+}
+
+
+export type GltfValidationTarget =
+  | 'basisu-fallback'
+  | 'basisu-compact'
+
+export interface GltfValidationIssue {
+  code: string
+  severity: 0 | 1 | 2 | 3
+  message: string
+  pointer?: string
+  offset?: number
+}
+
+export interface BasisuValidationCheck {
+  code: string
+  status: 'pass' | 'fail'
+  message: string
+}
+
+export interface GltfValidationReceipt {
+  schema: 'phiform.gltf-validation-receipt.v1'
+  id: string
+  createdAt: string
+  sourceArtifactId: string
+  sourceNodeId: string
+  target: GltfValidationTarget
+  targetReceiptId: string
+  filename: string
+  glbSha256: string
+  glbByteLength: number
+  qualification: 'pass' | 'warning' | 'fail'
+  official: {
+    validatorName: 'Khronos glTF-Validator'
+    validatorVersion: string
+    mimeType?: string
+    numErrors: number
+    numWarnings: number
+    numInfos: number
+    numHints: number
+    truncated: boolean
+    messages: GltfValidationIssue[]
+    extensionsUsed: string[]
+    extensionsRequired: string[]
+  }
+  phiformBasisu: {
+    status: 'pass' | 'fail'
+    checks: BasisuValidationCheck[]
+  }
+  notes: string[]
+}
+
+export interface PortableProjectV10 {
+  schema: 'phiform.project.v10'
+  savedAt: string
+  artifact: ModelArtifact
+  edits: WorkspaceEditState
+  editGraph: EditGraph
+  agentReceipts: AgentAuditReceipt[]
+  productionReceipts: ProductionReceipt[]
+  enginePackReceipts: EnginePackReceipt[]
+  textureReceipts: TextureReceipt[]
+  textureEncodingReceipts: TextureEncodingReceipt[]
+  basisuDerivedReceipts: BasisuDerivedReceipt[]
+  basisuCompactReceipts: BasisuCompactReceipt[]
+  gltfValidationReceipts: GltfValidationReceipt[]
   latestReceipt?: GenerationReceipt
   glbBase64?: string
 }
