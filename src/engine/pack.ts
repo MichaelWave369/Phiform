@@ -7,7 +7,7 @@ import type {
   ProductionProfileId,
 } from '../core/types'
 
-const FIXED_ZIP_TIME = new Date('1980-01-01T00:00:00.000Z')
+const FIXED_ZIP_TIME = new Date(2000, 0, 1, 0, 0, 0)
 
 export function engineProfileId(engine: EngineTarget): ProductionProfileId {
   return engine === 'godot' ? 'godot-game' : 'unreal-game'
@@ -75,10 +75,6 @@ export function buildEngineImportScene(
   root.name = sanitizeEngineName(assetLabel)
   root.add(visual)
 
-  const collisionMaterial = new THREE.MeshBasicMaterial({
-    color: 0x00ff88,
-    wireframe: true,
-  })
   const collisionNames: string[] = []
 
   sourceMeshes.forEach((sourceMesh, index) => {
@@ -111,7 +107,10 @@ export function buildEngineImportScene(
 
     const proxy = new THREE.Mesh(
       new THREE.BoxGeometry(size.x, size.y, size.z),
-      collisionMaterial.clone(),
+      new THREE.MeshBasicMaterial({
+        color: 0x00ff88,
+        wireframe: true,
+      }),
     )
     proxy.position.copy(center)
     proxy.name = collisionNodeName(engine, renderName)
@@ -168,7 +167,8 @@ export function engineImportInstructions(engine: EngineTarget): string {
 }
 
 export async function sha256Bytes(bytes: Uint8Array): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', bytes)
+  const copy = Uint8Array.from(bytes)
+  const digest = await crypto.subtle.digest('SHA-256', copy.buffer)
   return [...new Uint8Array(digest)]
     .map((value) => value.toString(16).padStart(2, '0'))
     .join('')
