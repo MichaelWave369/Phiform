@@ -176,12 +176,50 @@ export interface PortableProjectV1 {
   glbBase64?: string
 }
 
-export interface PortableProject {
+export type PortableProject = PortableProjectV3
+
+
+export interface AgentAuditFingerprint {
+  artifactId: string
+  nodeId: string
+  branch: string
+  revision: number
+  target: string
+}
+
+export interface AgentAuditReceipt {
+  schema: 'phiform.agent-receipt.v1'
+  id: string
+  commandId: string
+  agentId: string
+  command: string
+  capability: string
+  status: 'executed' | 'dispatched' | 'rejected'
+  createdAt: string
+  before: AgentAuditFingerprint
+  after: AgentAuditFingerprint
+  reason?: string
+  result?: Record<string, unknown>
+  effects: Array<{ kind: string; [key: string]: unknown }>
+}
+
+export interface PortableProjectV2 {
   schema: 'phiform.project.v2'
   savedAt: string
   artifact: ModelArtifact
   edits: WorkspaceEditState
   editGraph: EditGraph
+  latestReceipt?: GenerationReceipt
+  glbBase64?: string
+}
+
+export interface PortableProjectV3 {
+  schema: 'phiform.project.v3'
+  savedAt: string
+  artifact: ModelArtifact
+  edits: WorkspaceEditState
+  editGraph: EditGraph
+  agentReceipts: AgentAuditReceipt[]
   latestReceipt?: GenerationReceipt
   glbBase64?: string
 }
