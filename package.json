@@ -1,6 +1,6 @@
 {
   "name": "phiform",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -20,7 +20,10 @@
     "basisu:contract": "tsx scripts/basisu-glb-check.ts",
     "basisu:compact:contract": "tsx scripts/basisu-compact-check.ts",
     "gltf:validation:contract": "tsx scripts/gltf-validation-check.ts",
-    "release:contract": "tsx scripts/release-gate-check.ts"
+    "release:contract": "tsx scripts/release-gate-check.ts",
+    "signer:init": "node scripts/init-release-signer.mjs",
+    "attestation:verify": "node scripts/verify-release-attestation.mjs",
+    "attestation:contract": "node scripts/release-attestation-check.mjs"
   },
   "dependencies": {
     "react": "^19.1.1",

@@ -12,7 +12,7 @@ http://127.0.0.1:8787
 
 `GET /v1/health`
 
-Rung 3 reports bridge version `0.3.0`.
+Current bridge version: `0.6.0`.
 
 ## Backend discovery
 
@@ -178,4 +178,37 @@ The response normalizes:
 - extensions used/required
 - exact GLB SHA-256 and byte length
 
-Bridge protocol version is `0.5.0`.
+Bridge protocol version is `0.6.0`.
+
+
+## Release signer — Rung 15
+
+Optional signer endpoints:
+
+```text
+GET  /v1/release-signer
+POST /v1/release-attest
+```
+
+Configuration:
+
+```text
+PHIFORM_RELEASE_SIGNING_KEY
+PHIFORM_RELEASE_SIGNING_TOKEN
+```
+
+Both must be present for the signer to be available.
+
+The key must be an Ed25519 private key readable by Node's crypto subsystem.
+
+The signing route requires:
+
+```http
+Authorization: Bearer <token>
+```
+
+The bridge accepts the exact release ZIP bytes plus the matching release receipt, recomputes the ZIP SHA-256 and byte length, signs a canonical release statement, and verifies the signature locally before returning it.
+
+The descriptor exposes the public-key SHA-256 fingerprint but does not expose the private-key path or bearer token.
+
+CORS permits the `authorization` header because signing requires explicit bearer authorization.

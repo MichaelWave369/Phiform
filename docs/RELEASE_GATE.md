@@ -181,3 +181,14 @@ Rung 14 does not:
 - mismatched target receipt is rejected
 - deterministic ZIP hashing
 - release package contains asset + evidence + manifest
+
+
+## Rung 15 attestation handoff
+
+A successful governed release candidate may be passed to the optional Rung 15 Ed25519 signer.
+
+The release ZIP bytes must still be present in the current browser session, and the signer bridge independently re-hashes them before creating an attestation.
+
+The attestation is downstream of the release receipt. It does not replace the release gate or validation evidence.
+
+See [Release Attestations](RELEASE_ATTESTATION.md).
