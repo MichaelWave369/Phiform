@@ -25,6 +25,7 @@ export const AGENT_COMMAND_CAPABILITY: Record<AgentCommandName, AgentCapability>
   'workspace.transform.set': 'workspace.transform',
   'workspace.material.set': 'workspace.material',
   'target.artifact': 'target.write',
+  'target.mesh': 'target.write',
   'graph.commit': 'graph.write',
   'graph.branch': 'graph.write',
   'graph.checkout': 'graph.write',
@@ -218,6 +219,7 @@ export function executeAgentCommand(
     edits: cloneEdits(currentState.edits),
     editGraph: currentState.editGraph,
     target: cloneTarget(currentState.target),
+    meshTargets: currentState.meshTargets.map((mesh) => ({ ...mesh })),
   }
   const effects: AgentExecutionResult['effects'] = []
   let result: Record<string, unknown> | undefined
@@ -232,6 +234,7 @@ export function executeAgentCommand(
           branch: state.editGraph.currentBranch,
           revision: state.edits.revision,
           target: state.target,
+          meshTargets: state.meshTargets,
           edits: state.edits,
         }
         break
@@ -286,6 +289,19 @@ export function executeAgentCommand(
       case 'target.artifact': {
         state = { ...state, target: { kind: 'artifact' } }
         result = { target: 'artifact' }
+        break
+      }
+
+      case 'target.mesh': {
+        const id = command.args.id?.trim()
+        if (!id) throw new Error('Mesh target id is required.')
+        const mesh = state.meshTargets.find((candidate) => candidate.id === id)
+        if (!mesh) throw new Error(`Unknown mesh target: ${id}`)
+        state = {
+          ...state,
+          target: { kind: 'mesh', mesh: { ...mesh } },
+        }
+        result = { target: mesh.id, name: mesh.name }
         break
       }
 
@@ -374,7 +390,7 @@ export function executeAgentCommand(
     agentId: command.agentId,
     command: command.command,
     capability,
-    status: 'executed',
+    status: effects.length > 0 ? 'dispatched' : 'executed',
     createdAt,
     before,
     after: fingerprint(state),
