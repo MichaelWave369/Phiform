@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AgentConsole } from './components/AgentConsole'
+import { EnginePackPanel } from './components/EnginePackPanel'
 import { ProductionPanel } from './components/ProductionPanel'
 import { Viewport } from './components/Viewport'
 import {
@@ -39,6 +40,8 @@ import { receiptChecksum, receiptText } from './core/receipt'
 import type {
   DerivedArtifactLineage,
   EditTarget,
+  EnginePackReceipt,
+  EngineTarget,
   GenerationReceipt,
   ImageSource,
   MeshStats,
@@ -63,6 +66,12 @@ import { LocalBridgeClient } from './neural/localBridgeClient'
 import { mockAdapter } from './neural/mockAdapter'
 import { productionProfile } from './production/profiles'
 import type { ProductionRuntimeResult } from './production/runtime'
+import {
+  buildEnginePack,
+  engineImportInstructions,
+  sha256Bytes,
+} from './engine/pack'
+import type { EngineRuntimeResult } from './engine/runtime'
 
 const initialArtifact: ModelArtifact = {
   kind: 'primitive',
@@ -163,6 +172,10 @@ export function App() {
   const [productionReceipts, setProductionReceipts] = useState<ProductionReceipt[]>([])
   const [productionRequest, setProductionRequest] = useState(0)
   const [productionBusy, setProductionBusy] = useState(false)
+  const [engineTarget, setEngineTarget] = useState<EngineTarget>('godot')
+  const [engineRequest, setEngineRequest] = useState(0)
+  const [engineBusy, setEngineBusy] = useState(false)
+  const [enginePackReceipts, setEnginePackReceipts] = useState<EnginePackReceipt[]>([])
   const importRef = useRef<HTMLInputElement>(null)
   const agentStateRef = useRef<AgentWorkspaceState>({
     artifact: initialArtifact,
@@ -325,6 +338,7 @@ export function App() {
       agentReceiptsRef.current = []
       setProductionReceipts([])
       setProductionAudit(undefined)
+      setEnginePackReceipts([])
       setProjectStatus('')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Generation failed.')
@@ -443,6 +457,7 @@ export function App() {
         editGraph,
         agentReceipts,
         productionReceipts,
+        enginePackReceipts,
         latestReceipt,
       )
       setProjectStatus('SAVED LOCALLY')
@@ -462,6 +477,7 @@ export function App() {
     setAgentReceipts(importedAgentReceipts)
     agentReceiptsRef.current = importedAgentReceipts
     setProductionReceipts(project.productionReceipts)
+    setEnginePackReceipts(project.enginePackReceipts)
     setProductionAudit(undefined)
     setMeshTargets([])
     setSelected(true)
@@ -490,10 +506,11 @@ export function App() {
         editGraph,
         agentReceipts,
         productionReceipts,
+        enginePackReceipts,
         latestReceipt,
       )
       downloadPortableProject(project)
-      setProjectStatus('PROJECT V4 EXPORTED')
+      setProjectStatus('PROJECT V5 EXPORTED')
     } catch (cause) {
       setProjectStatus('')
       setError(cause instanceof Error ? cause.message : 'Project export failed.')
@@ -512,6 +529,116 @@ export function App() {
       setProjectStatus('')
       setError(cause instanceof Error ? cause.message : 'Project import failed.')
     }
+  }
+
+  const handleEngineComplete = async (
+    result: EngineRuntimeResult,
+  ) => {
+    setError('')
+    try {
+      const baseName = safeName(artifact.label)
+      const importScenePath =
+        result.engine === 'godot'
+          ? 'import/asset-godot.glb'
+          : 'import/asset-unreal.glb'
+
+      const inputFiles = [
+        {
+          path: importScenePath,
+          role: 'import-scene' as const,
+          bytes: new Uint8Array(await result.importSceneBlob.arrayBuffer()),
+        },
+        {
+          path: 'IMPORT.md',
+          role: 'instructions' as const,
+          bytes: new TextEncoder().encode(
+            engineImportInstructions(result.engine),
+          ),
+        },
+      ]
+
+      const lods = []
+      for (const file of result.lodFiles) {
+        const path = \`models/lod\${file.lod}.glb\`
+        inputFiles.push({
+          path,
+          role: 'lod',
+          bytes: new Uint8Array(await file.blob.arrayBuffer()),
+        })
+        lods.push({
+          lod: file.lod,
+          path,
+          ratio: file.ratio,
+          triangles: file.triangles,
+        })
+      }
+
+      const built = await buildEnginePack({
+        engine: result.engine,
+        createdAt: new Date().toISOString(),
+        sourceArtifactId: artifact.id,
+        sourceNodeId: editGraph.currentNodeId,
+        productionProfileId: result.productionProfileId,
+        collisionNodeNames: result.collisionNodeNames,
+        importScenePath,
+        files: inputFiles,
+        lods,
+        notes: [
+          'Package contains standard GLB assets and a PhiForm engine manifest.',
+          'Collision proxies use engine-specific naming conventions inside the combined import scene.',
+          'LOD files are packaged separately and are not claimed to be auto-wired by the target engine.',
+        ],
+      })
+
+      const packageFilename = \`\${baseName}-\${result.engine}-engine-pack.zip\`
+      const packageSha256 = await sha256Bytes(built.zipBytes)
+
+      const receipt: EnginePackReceipt = {
+        schema: 'phiform.engine-pack-receipt.v1',
+        id: \`engine-pack-receipt-\${crypto.randomUUID?.() ?? Date.now().toString(36)}\`,
+        createdAt: new Date().toISOString(),
+        engine: result.engine,
+        sourceArtifactId: artifact.id,
+        sourceNodeId: editGraph.currentNodeId,
+        manifest: built.manifest,
+        files: built.fileRecords,
+        packageFilename,
+        packageByteLength: built.zipBytes.byteLength,
+        packageSha256,
+      }
+
+      setEnginePackReceipts((current) => [...current, receipt].slice(-50))
+
+      downloadBlob(
+        new Blob([built.zipBytes], { type: 'application/zip' }),
+        packageFilename,
+      )
+
+      downloadBlob(
+        new Blob([JSON.stringify(receipt, null, 2)], {
+          type: 'application/json',
+        }),
+        \`\${baseName}-\${result.engine}-engine-pack-receipt.json\`,
+      )
+
+      setProjectStatus(
+        \`ENGINE PACK \${result.engine.toUpperCase()} · \${built.fileRecords.length} FILES\`,
+      )
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : 'Engine pack generation failed.',
+      )
+    } finally {
+      setEngineBusy(false)
+    }
+  }
+
+  const buildEngineAssetPack = () => {
+    setEngineBusy(true)
+    setProjectStatus('BUILDING ENGINE ASSET PACK…')
+    setEngineRequest((value) => value + 1)
   }
 
   const handleProductionComplete = async (
@@ -660,7 +787,7 @@ export function App() {
         </div>
 
         <div className="top-status">
-          <span className="pill"><i /> RUNG 7</span>
+          <span className="pill"><i /> RUNG 8</span>
           <span className="pill muted">
             {editGraph.currentBranch} · {dirty ? 'WORKING TREE DIRTY' : 'COMMITTED'}
           </span>
@@ -775,6 +902,8 @@ export function App() {
             exportRequest={exportRequest}
             productionProfileId={productionProfileId}
             productionRequest={productionRequest}
+            engineTarget={engineTarget}
+            engineRequest={engineRequest}
             onSelectedChange={setSelected}
             onTargetChange={setTarget}
             onMeshTargetsChange={setMeshTargets}
@@ -783,9 +912,11 @@ export function App() {
             onProductionAuditChange={setProductionAudit}
             onExportComplete={(blob) => { void handleEditedExport(blob) }}
             onProductionComplete={(result) => { void handleProductionComplete(result) }}
+            onEngineComplete={(result) => { void handleEngineComplete(result) }}
             onError={(message) => {
               setError(message)
               setProductionBusy(false)
+              setEngineBusy(false)
             }}
           />
 
@@ -821,6 +952,7 @@ export function App() {
             <div><span>BRANCHES</span><strong>{Object.keys(editGraph.branches).length}</strong></div>
             <div><span>AGENT RECEIPTS</span><strong>{agentReceipts.length}</strong></div>
             <div><span>PROD RECEIPTS</span><strong>{productionReceipts.length}</strong></div>
+            <div><span>ENGINE PACKS</span><strong>{enginePackReceipts.length}</strong></div>
           </div>
 
           <div className="editor-card">
@@ -1032,6 +1164,14 @@ export function App() {
             onBuild={buildProductionPack}
           />
 
+          <EnginePackPanel
+            engine={engineTarget}
+            busy={engineBusy}
+            receipts={enginePackReceipts}
+            onEngineChange={setEngineTarget}
+            onBuild={buildEngineAssetPack}
+          />
+
           <AgentConsole
             state={agentStateFingerprint}
             meshTargets={meshTargets}
@@ -1091,11 +1231,11 @@ export function App() {
           </div>
 
           <div className="authority-note">
-            <span>QUALIFIED ≠ PERFECT</span>
+            <span>PACKAGE ≠ NATIVE ASSET</span>
             <p>
-              Production status reports exactly what PhiForm measured. Conservative
-              repairs can remove indexed degenerates and recompute normals; open and
-              non-manifold topology remains visible until a qualified repair method exists.
+              Engine packs bind GLB assets, collision conventions, LOD files, coordinates,
+              hashes, and import notes into one receipt. Native engine resources remain the
+              target engine's authority.
             </p>
           </div>
         </aside>
