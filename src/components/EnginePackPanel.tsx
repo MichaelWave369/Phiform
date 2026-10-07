@@ -29,7 +29,7 @@ export function EnginePackPanel({
         </div>
         <span>
           {latest
-            ? \`\${receipts.length} RECEIPT\${receipts.length === 1 ? '' : 'S'}\`
+            ? `${receipts.length} RECEIPT${receipts.length === 1 ? '' : 'S'}`
             : 'NO PACKS'}
         </span>
       </div>
