@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { AgentConsole } from './components/AgentConsole'
 import { EnginePackPanel } from './components/EnginePackPanel'
 import { ProductionPanel } from './components/ProductionPanel'
+import { TexturePanel } from './components/TexturePanel'
 import { Viewport } from './components/Viewport'
 import {
   executeAgentCommand,
@@ -50,6 +51,9 @@ import type {
   ProductionAudit,
   ProductionProfileId,
   ProductionReceipt,
+  TextureAudit,
+  TextureProfileId,
+  TextureReceipt,
   TransformMode,
   Vec3Tuple,
   WorkspaceEditState,
@@ -73,6 +77,7 @@ import {
   type EnginePackInputFile,
 } from './engine/pack'
 import type { EngineRuntimeResult } from './engine/runtime'
+import { buildTextureReceipt } from './texture/audit'
 
 const initialArtifact: ModelArtifact = {
   kind: 'primitive',
@@ -177,6 +182,10 @@ export function App() {
   const [engineRequest, setEngineRequest] = useState(0)
   const [engineBusy, setEngineBusy] = useState(false)
   const [enginePackReceipts, setEnginePackReceipts] = useState<EnginePackReceipt[]>([])
+  const [textureProfileId, setTextureProfileId] =
+    useState<TextureProfileId>('game-textures')
+  const [textureAudit, setTextureAudit] = useState<TextureAudit | undefined>()
+  const [textureReceipts, setTextureReceipts] = useState<TextureReceipt[]>([])
   const importRef = useRef<HTMLInputElement>(null)
   const agentStateRef = useRef<AgentWorkspaceState>({
     artifact: initialArtifact,
@@ -340,6 +349,8 @@ export function App() {
       setProductionReceipts([])
       setProductionAudit(undefined)
       setEnginePackReceipts([])
+      setTextureReceipts([])
+      setTextureAudit(undefined)
       setProjectStatus('')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Generation failed.')
@@ -459,6 +470,7 @@ export function App() {
         agentReceipts,
         productionReceipts,
         enginePackReceipts,
+        textureReceipts,
         latestReceipt,
       )
       setProjectStatus('SAVED LOCALLY')
@@ -479,7 +491,9 @@ export function App() {
     agentReceiptsRef.current = importedAgentReceipts
     setProductionReceipts(project.productionReceipts)
     setEnginePackReceipts(project.enginePackReceipts)
+    setTextureReceipts(project.textureReceipts)
     setProductionAudit(undefined)
+    setTextureAudit(undefined)
     setMeshTargets([])
     setSelected(true)
   }
@@ -508,10 +522,11 @@ export function App() {
         agentReceipts,
         productionReceipts,
         enginePackReceipts,
+        textureReceipts,
         latestReceipt,
       )
       downloadPortableProject(project)
-      setProjectStatus('PROJECT V5 EXPORTED')
+      setProjectStatus('PROJECT V6 EXPORTED')
     } catch (cause) {
       setProjectStatus('')
       setError(cause instanceof Error ? cause.message : 'Project export failed.')
@@ -530,6 +545,30 @@ export function App() {
       setProjectStatus('')
       setError(cause instanceof Error ? cause.message : 'Project import failed.')
     }
+  }
+
+  const recordTextureQualification = () => {
+    if (!textureAudit) {
+      setError('No texture audit is available for the current scene.')
+      return
+    }
+
+    const receipt = buildTextureReceipt(
+      artifact,
+      editGraph.currentNodeId,
+      textureAudit,
+    )
+
+    setTextureReceipts((current) => [...current, receipt].slice(-50))
+    downloadBlob(
+      new Blob([JSON.stringify(receipt, null, 2)], {
+        type: 'application/json',
+      }),
+      `${safeName(artifact.label)}-${textureAudit.profileId}-textures.json`,
+    )
+    setProjectStatus(
+      `TEXTURE RECEIPT ${textureAudit.qualification.toUpperCase()} · ${textureAudit.totals.textures} TEXTURES`,
+    )
   }
 
   const handleEngineComplete = async (
@@ -789,7 +828,7 @@ export function App() {
         </div>
 
         <div className="top-status">
-          <span className="pill"><i /> RUNG 8</span>
+          <span className="pill"><i /> RUNG 9</span>
           <span className="pill muted">
             {editGraph.currentBranch} · {dirty ? 'WORKING TREE DIRTY' : 'COMMITTED'}
           </span>
@@ -906,12 +945,14 @@ export function App() {
             productionRequest={productionRequest}
             engineTarget={engineTarget}
             engineRequest={engineRequest}
+            textureProfileId={textureProfileId}
             onSelectedChange={setSelected}
             onTargetChange={setTarget}
             onMeshTargetsChange={setMeshTargets}
             onEditsChange={setEdits}
             onStatsChange={setMeshStats}
             onProductionAuditChange={setProductionAudit}
+            onTextureAuditChange={setTextureAudit}
             onExportComplete={(blob) => { void handleEditedExport(blob) }}
             onProductionComplete={(result) => { void handleProductionComplete(result) }}
             onEngineComplete={(result) => { void handleEngineComplete(result) }}
@@ -955,6 +996,7 @@ export function App() {
             <div><span>AGENT RECEIPTS</span><strong>{agentReceipts.length}</strong></div>
             <div><span>PROD RECEIPTS</span><strong>{productionReceipts.length}</strong></div>
             <div><span>ENGINE PACKS</span><strong>{enginePackReceipts.length}</strong></div>
+            <div><span>TEXTURE RECEIPTS</span><strong>{textureReceipts.length}</strong></div>
           </div>
 
           <div className="editor-card">
@@ -1166,6 +1208,14 @@ export function App() {
             onBuild={buildProductionPack}
           />
 
+          <TexturePanel
+            profileId={textureProfileId}
+            audit={textureAudit}
+            receipts={textureReceipts}
+            onProfileChange={setTextureProfileId}
+            onRecord={recordTextureQualification}
+          />
+
           <EnginePackPanel
             engine={engineTarget}
             busy={engineBusy}
@@ -1233,11 +1283,10 @@ export function App() {
           </div>
 
           <div className="authority-note">
-            <span>PACKAGE ≠ NATIVE ASSET</span>
+            <span>PLAN ≠ COMPRESSION</span>
             <p>
-              Engine packs bind GLB assets, collision conventions, LOD files, coordinates,
-              hashes, and import notes into one receipt. Native engine resources remain the
-              target engine's authority.
+              Texture receipts qualify dimensions, roles, color space, packing, and GPU
+              memory. KTX2/Basis entries remain planned until encoded bytes actually exist.
             </p>
           </div>
         </aside>
