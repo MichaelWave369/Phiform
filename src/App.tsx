@@ -610,8 +610,9 @@ export function App() {
 
       setEnginePackReceipts((current) => [...current, receipt].slice(-50))
 
+      const zipBuffer = Uint8Array.from(built.zipBytes).buffer
       downloadBlob(
-        new Blob([built.zipBytes], { type: 'application/zip' }),
+        new Blob([zipBuffer], { type: 'application/zip' }),
         packageFilename,
       )
 
