@@ -190,7 +190,7 @@ export interface EnginePackBuildInput {
   sourceArtifactId: string
   sourceNodeId: string
   productionProfileId: ProductionProfileId
-  collisionNodeName: string
+  collisionNodeNames: string[]
   importScenePath: string
   files: EnginePackInputFile[]
   lods: Array<{
@@ -245,7 +245,7 @@ export async function buildEnginePack(
     },
     collision: {
       kind: 'box',
-      nodeName: input.collisionNodeName,
+      nodeNames: [...input.collisionNodeNames],
       embeddedInImportScene: true,
     },
     lods: input.lods.map((lod) => ({
