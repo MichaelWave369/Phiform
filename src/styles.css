@@ -1935,3 +1935,142 @@ textarea:focus {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+
+.texture-encoder {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid #365160;
+  border-radius: 8px;
+  background:
+    linear-gradient(150deg, rgba(56, 122, 145, 0.1), transparent 55%),
+    #091116;
+}
+
+.texture-encoder-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.texture-encoder-head span,
+.texture-encoder-head strong {
+  display: block;
+}
+
+.texture-encoder-head span {
+  color: #67808b;
+  font-size: 7px;
+  letter-spacing: 0.09em;
+}
+
+.texture-encoder-head strong {
+  margin-top: 3px;
+  color: #a9d3df;
+  font-size: 9px;
+}
+
+.texture-encoder-head i {
+  padding: 4px 6px;
+  border: 1px solid #34424a;
+  border-radius: 999px;
+  color: #75838a;
+  font-size: 7px;
+  font-style: normal;
+  letter-spacing: 0.08em;
+}
+
+.texture-encoder-head i.online {
+  border-color: #2c5948;
+  color: #7fd2aa;
+}
+
+.texture-encoder-head i.error {
+  border-color: #653840;
+  color: #da969e;
+}
+
+.texture-encoder-head i.checking {
+  border-color: #62542f;
+  color: #d6bd76;
+}
+
+.texture-encoder p {
+  margin: 7px 0 0;
+  color: #667985;
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.texture-encoder-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.texture-encoder-actions button {
+  padding: 8px;
+  border: 1px solid #334a57;
+  border-radius: 7px;
+  background: #0d161c;
+  color: #7f9ca8;
+  font-size: 7px;
+  letter-spacing: 0.07em;
+  cursor: pointer;
+}
+
+.texture-encoder-actions button.execute {
+  border-color: #487487;
+  color: #a2d6e5;
+}
+
+.texture-encoder-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.texture-execution-receipt {
+  margin-top: 8px;
+  padding: 9px;
+  border: 1px solid #2e574c;
+  border-radius: 7px;
+  background: #09130f;
+}
+
+.texture-execution-receipt span,
+.texture-execution-receipt strong,
+.texture-execution-receipt small {
+  display: block;
+}
+
+.texture-execution-receipt span {
+  color: #6c8e80;
+  font-size: 7px;
+  letter-spacing: 0.09em;
+}
+
+.texture-execution-receipt strong {
+  margin-top: 4px;
+  color: #9fd1bb;
+  font-size: 9px;
+}
+
+.texture-execution-receipt small {
+  margin-top: 3px;
+  color: #698076;
+  font: 7px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.texture-execution-receipt p {
+  margin: 5px 0 0;
+  color: #789287;
+  font: 7px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@media (max-width: 720px) {
+  .texture-encoder-actions {
+    grid-template-columns: 1fr;
+  }
+}
