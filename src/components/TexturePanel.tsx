@@ -1,4 +1,5 @@
 import type {
+  BasisuCompactReceipt,
   BasisuDerivedReceipt,
   TextureAudit,
   TextureEncoderDescriptor,
@@ -18,12 +19,16 @@ interface TexturePanelProps {
   encodingBusy: boolean
   basisuBusy: boolean
   basisuReceipts: readonly BasisuDerivedReceipt[]
+  compactReceipts: readonly BasisuCompactReceipt[]
+  compactBusy: boolean
+  compactSessionReady: boolean
   basisuSessionReady: boolean
   onProfileChange: (profileId: TextureProfileId) => void
   onRecord: () => void
   onProbeEncoder: () => void
   onExecuteEncoding: () => void
   onBuildBasisuGlb: () => void
+  onCompactBasisuGlb: () => void
 }
 
 function bytes(value: number): string {
@@ -42,17 +47,22 @@ export function TexturePanel({
   encodingBusy,
   basisuBusy,
   basisuReceipts,
+  compactReceipts,
+  compactBusy,
+  compactSessionReady,
   basisuSessionReady,
   onProfileChange,
   onRecord,
   onProbeEncoder,
   onExecuteEncoding,
   onBuildBasisuGlb,
+  onCompactBasisuGlb,
 }: TexturePanelProps) {
   const profile = TEXTURE_PROFILES[profileId]
   const latest = receipts.at(-1)
   const latestEncoding = encodingReceipts.at(-1)
   const latestBasisu = basisuReceipts.at(-1)
+  const latestCompact = compactReceipts.at(-1)
   const canExecute =
     Boolean(audit) &&
     audit?.qualification !== 'fail' &&
@@ -198,9 +208,33 @@ export function TexturePanel({
         </p>
       </div>
 
+      <div className="basisu-compact">
+        <div className="basisu-derived-head">
+          <div>
+            <span>COMPACT REQUIRED-BASISU GLB</span>
+            <strong>Strip fallbacks + repack BIN</strong>
+          </div>
+          <i>{compactSessionReady ? 'FULL READY' : 'FULL GLB NEEDED'}</i>
+        </div>
+
+        <button
+          disabled={compactBusy || !compactSessionReady}
+          onClick={onCompactBasisuGlb}
+        >
+          {compactBusy
+            ? 'REPACKING BASISU GLB…'
+            : 'BUILD COMPACT BASISU GLB'}
+        </button>
+
+        <p>
+          Only FULL-coverage Rung 11 assets qualify. Fallback image objects and
+          their now-unreferenced bufferViews are removed; KHR_texture_basisu becomes required.
+        </p>
+      </div>
+
       <p className="texture-caveat">
-        Rung 10 proves KTX2 bytes. Rung 11 can bind those bytes into a derived
-        GLB only while the verified payloads remain available in this browser session.
+        Rung 10 proves KTX2 bytes. Rung 11 binds them with fallbacks. Rung 12
+        strips those fallbacks only after full coverage and reference validation.
       </p>
 
       {latest && (
@@ -240,6 +274,21 @@ export function TexturePanel({
           </small>
           <p>
             {latestBasisu.fallbackOnlyTextureCount} fallback-only · {latestBasisu.unboundExecutedTextureCount} unbound executed
+          </p>
+        </div>
+      )}
+
+      {latestCompact && (
+        <div className="basisu-compact-receipt">
+          <span>LATEST COMPACT BASISU GLB</span>
+          <strong>
+            {latestCompact.textureCount} textures · required extension
+          </strong>
+          <small>
+            {bytes(latestCompact.sourceGlbByteLength)} → {bytes(latestCompact.outputGlbByteLength)}
+          </small>
+          <p>
+            {bytes(Math.max(latestCompact.byteSavings, 0))} saved · {latestCompact.removedFallbackImageCount} fallback images removed
           </p>
         </div>
       )}

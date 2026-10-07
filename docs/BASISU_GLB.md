@@ -183,3 +183,14 @@ Rung 11 does not:
 - logical buffer-length update
 - fallback-only texture accounting
 - unreferenced payloads do not invent bindings
+
+
+## Rung 12 compaction handoff
+
+A Rung 11 asset with `bindingCoverage: full` may be compacted by Rung 12.
+
+Rung 12 removes the core PNG/JPEG fallback sources, marks `KHR_texture_basisu` required, removes the fallback image objects, and rebuilds the embedded BIN chunk from still-referenced bufferViews.
+
+Partial-coverage Rung 11 assets are deliberately not eligible.
+
+See [Compact Required-BasisU GLB](BASISU_COMPACTION.md).

@@ -4,9 +4,9 @@
 
 > Neural systems may propose geometry. The workspace keeps editable state, provenance, and export authority.
 
-## Current state — v0.11 / Rung 11
+## Current state — v0.12 / Rung 12
 
-PhiForm now binds verified KTX2/Basis outputs into derived GLB assets using the ratified `KHR_texture_basisu` extension while preserving original image fallbacks.
+PhiForm now safely compacts full-coverage BasisU GLBs by removing superseded PNG/JPEG fallbacks, making `KHR_texture_basisu` required, and physically repacking the embedded BIN data.
 
 ### Rung 1 — workbench foundation ✅
 React/TypeScript studio, Three.js viewport, adapter contract, proof generation, receipts.
@@ -104,6 +104,25 @@ Topology/attribute audit, conservative repair, Meshopt-backed LOD generation, pr
 - `phiform.basisu-derived-receipt.v1`
 - project v8 persistence of derived receipts
 - session-local KTX2 payload requirement prevents hashes from being mistaken for bytes
+
+### Rung 12 — compact required-BasisU GLB ✅
+- accepts only FULL-coverage Rung 11 assets
+- verifies in-session fallback-bearing GLB bytes against their receipt
+- removes core `texture.source` fallbacks
+- promotes `KHR_texture_basisu` into `extensionsRequired`
+- removes superseded PNG/JPEG image objects
+- remaps surviving KTX2 image indices
+- recursively discovers still-referenced bufferViews
+- drops unreferenced fallback image bufferViews
+- rebuilds the BIN chunk from surviving referenced ranges
+- preserves bufferView payload bytes and metadata
+- re-aligns compacted bufferViews on 4-byte offsets
+- updates all surviving `bufferView` references
+- records physically reclaimed binary bytes
+- source/compact GLB SHA-256 lineage
+- `phiform.basisu-compact-receipt.v1`
+- project v9 persistence
+- CI proves real GLB byte savings, not JSON-only cleanup
 
 ## Engine pack structure
 
@@ -214,6 +233,7 @@ npm run engine:contract
 npm run texture:contract
 npm run texture:encode:contract
 npm run basisu:contract
+npm run basisu:compact:contract
 npm run check
 npm run build
 ```
@@ -223,12 +243,12 @@ npm run build
 New saves use:
 
 ```text
-phiform.project.v8
+phiform.project.v9
 ```
 
-Project v8 preserves generation evidence, workspace state, edit lineage, agent receipts, production receipts, engine-pack receipts, texture qualification receipts, executed KTX2 receipts, BasisU-derived GLB receipts, and embedded source GLB bytes.
+Project v9 preserves generation evidence, workspace state, edit lineage, agent receipts, production receipts, engine-pack receipts, texture qualification receipts, executed KTX2 receipts, BasisU-derived GLB receipts, compact BasisU receipts, and embedded source GLB bytes.
 
-Project v1 through v7 remain importable. Migration never invents history for capabilities that did not exist yet.
+Project v1 through v8 remain importable. Migration never invents history for capabilities that did not exist yet.
 
 ## Documentation
 
@@ -244,10 +264,11 @@ Project v1 through v7 remain importable. Migration never invents history for cap
 - [Texture + material qualification](docs/TEXTURES.md)
 - [Executed KTX2 / Basis encoding](docs/KTX2_ENCODING.md)
 - [KHR_texture_basisu derived GLB](docs/BASISU_GLB.md)
+- [Compact required-BasisU GLB](docs/BASISU_COMPACTION.md)
 
 ## Next
 
-The next texture rung can compact fallback-bearing BasisU GLBs by safely stripping superseded PNG/JPEG image payloads and proving all remaining texture references; other production work includes qualified manifold repair, better collision proxies, and semantic retopology.
+Likely next production work includes visual texture error metrics, qualified manifold repair, better collision proxies, semantic retopology, and engine-side validation of compact BasisU imports.
 
 ## License
 

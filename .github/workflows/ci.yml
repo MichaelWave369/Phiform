@@ -47,6 +47,9 @@ jobs:
       - name: KHR_texture_basisu GLB contract
         run: npm run basisu:contract
 
+      - name: Compact required-BasisU GLB contract
+        run: npm run basisu:compact:contract
+
       - name: Typecheck
         run: npm run check
 
