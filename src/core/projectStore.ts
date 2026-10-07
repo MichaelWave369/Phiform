@@ -263,6 +263,7 @@ function normalizeProject(project: AnyProject): PortableProject {
     enginePackReceipts: [],
     textureReceipts: [],
     textureEncodingReceipts: [],
+    basisuDerivedReceipts: [],
     latestReceipt: project.latestReceipt,
     glbBase64: project.glbBase64,
   }
