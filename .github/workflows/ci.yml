@@ -29,6 +29,9 @@ jobs:
       - name: Edit graph contract
         run: npm run graph:contract
 
+      - name: Agent command contract
+        run: npm run agent:contract
+
       - name: Typecheck
         run: npm run check
 

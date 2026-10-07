@@ -1199,3 +1199,182 @@ textarea:focus {
     bottom: 42px;
   }
 }
+
+
+.agent-card {
+  margin-top: 16px;
+  padding: 13px;
+  border: 1px solid #25404a;
+  border-radius: 10px;
+  background:
+    linear-gradient(150deg, rgba(38, 100, 118, 0.12), transparent 42%),
+    #090e13;
+}
+
+.agent-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.agent-head strong {
+  display: block;
+  color: #98d8e8;
+  font: 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.agent-head > span {
+  padding: 5px 7px;
+  border: 1px solid #294754;
+  border-radius: 999px;
+  color: #6f9fac;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+}
+
+.agent-capabilities {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px 8px;
+  margin-top: 11px;
+}
+
+.agent-capabilities label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: #708892;
+  font: 8px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.agent-capabilities input {
+  margin: 0;
+}
+
+.agent-examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 11px;
+}
+
+.agent-examples button,
+.agent-execute {
+  border: 1px solid #2b424d;
+  border-radius: 6px;
+  background: #0e171c;
+  color: #7aa4b1;
+  padding: 6px 7px;
+  font-size: 7px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.agent-examples button:hover,
+.agent-execute:hover {
+  border-color: #477080;
+  color: #a7deeb;
+}
+
+.agent-command-input {
+  min-height: 190px;
+  margin-top: 9px;
+  resize: vertical;
+  border-color: #263942;
+  background: #070d11;
+  color: #9eb7c1;
+  font: 8px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.agent-execute {
+  width: 100%;
+  margin-top: 7px;
+  border-color: #3e6675;
+  color: #9fd9e7;
+}
+
+.agent-error {
+  margin-top: 7px;
+  padding: 8px;
+  border: 1px solid #5b3439;
+  border-radius: 7px;
+  background: #160e11;
+  color: #d59ca4;
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.agent-state {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  color: #50656e;
+  font: 7px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.agent-receipt {
+  margin-top: 9px;
+  padding: 9px;
+  border: 1px solid #263942;
+  border-radius: 7px;
+  background: #0a1115;
+}
+
+.agent-receipt span,
+.agent-receipt strong,
+.agent-receipt small {
+  display: block;
+}
+
+.agent-receipt span {
+  color: #617984;
+  font-size: 7px;
+  letter-spacing: 0.1em;
+}
+
+.agent-receipt strong {
+  margin-top: 4px;
+  color: #a8c9d3;
+  font-size: 9px;
+}
+
+.agent-receipt small {
+  margin-top: 3px;
+  overflow: hidden;
+  color: #687983;
+  font: 7px ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-receipt p {
+  margin: 6px 0 0;
+  color: #97767b;
+  font-size: 8px;
+  line-height: 1.4;
+}
+
+.agent-receipt.executed {
+  border-color: #285044;
+}
+
+.agent-receipt.dispatched {
+  border-color: #564e2f;
+}
+
+.agent-receipt.rejected {
+  border-color: #583239;
+}
+
+@media (max-width: 720px) {
+  .agent-capabilities {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-state {
+    display: grid;
+  }
+}

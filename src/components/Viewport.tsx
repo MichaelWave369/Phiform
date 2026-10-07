@@ -84,15 +84,18 @@ function meshCounts(mesh: THREE.Mesh): { vertices: number; triangles: number } {
   return { vertices, triangles }
 }
 
-function indexMeshes(object: THREE.Object3D) {
+function indexMeshes(object: THREE.Object3D): MeshTarget[] {
   let index = 0
+  const targets: MeshTarget[] = []
   object.traverse((child) => {
     if (!(child instanceof THREE.Mesh)) return
     const meshId = `mesh-${String(index).padStart(3, '0')}`
     child.userData.phiformMeshId = meshId
     child.userData.phiformMeshName = child.name || `Mesh ${index + 1}`
+    targets.push(targetForMesh(child))
     index += 1
   })
+  return targets
 }
 
 function targetForMesh(mesh: THREE.Mesh): MeshTarget {
@@ -157,6 +160,7 @@ interface ViewportProps {
   exportRequest: number
   onSelectedChange: (selected: boolean) => void
   onTargetChange: (target: EditTarget) => void
+  onMeshTargetsChange: (targets: MeshTarget[]) => void
   onEditsChange: (edits: WorkspaceEditState) => void
   onStatsChange: (stats: MeshStats) => void
   onExportComplete: (blob: Blob) => void
@@ -172,6 +176,7 @@ export function Viewport({
   exportRequest,
   onSelectedChange,
   onTargetChange,
+  onMeshTargetsChange,
   onEditsChange,
   onStatsChange,
   onExportComplete,
@@ -393,7 +398,7 @@ export function Viewport({
     }
 
     const install = (object: THREE.Object3D) => {
-      indexMeshes(object)
+      onMeshTargetsChange(indexMeshes(object))
       rememberBaseMaterial(object)
       object.position.set(...edits.position)
       object.rotation.set(...edits.rotation)

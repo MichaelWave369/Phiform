@@ -1,5 +1,21 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { AgentConsole } from './components/AgentConsole'
 import { Viewport } from './components/Viewport'
+import {
+  executeAgentCommand,
+  parseAgentCommand,
+} from './agent/engine'
+import type {
+  AgentCapability,
+  AgentCommand,
+  AgentReceipt,
+  AgentStateFingerprint,
+  AgentWorkspaceState,
+} from './agent/types'
+import {
+  commandCatalog,
+  installPhiFormAgentApi,
+} from './agent/windowApi'
 import {
   checkoutNode,
   commitWorkspaceSnapshot,
@@ -25,6 +41,7 @@ import type {
   GenerationReceipt,
   ImageSource,
   MeshStats,
+  MeshTarget,
   ModelArtifact,
   TransformMode,
   Vec3Tuple,
@@ -91,6 +108,16 @@ function derivedId(): string {
   return uuid ? `derived-${uuid}` : `derived-${Date.now().toString(36)}`
 }
 
+function agentFingerprint(state: AgentWorkspaceState): AgentStateFingerprint {
+  return {
+    artifactId: state.artifact.id,
+    nodeId: state.editGraph.currentNodeId,
+    branch: state.editGraph.currentBranch,
+    revision: state.edits.revision,
+    target: state.target.kind === 'mesh' ? state.target.mesh.id : 'artifact',
+  }
+}
+
 export function App() {
   const [prompt, setPrompt] = useState('luminous nested portal machine')
   const [image, setImage] = useState<ImageSource | undefined>()
@@ -102,6 +129,7 @@ export function App() {
     createEditGraph(initialArtifact, defaultWorkspaceEdits()),
   )
   const [target, setTarget] = useState<EditTarget>({ kind: 'artifact' })
+  const [meshTargets, setMeshTargets] = useState<MeshTarget[]>([])
   const [meshStats, setMeshStats] = useState<MeshStats>(emptyStats)
   const [transformMode, setTransformMode] = useState<TransformMode>('translate')
   const [selected, setSelected] = useState(true)
@@ -118,7 +146,23 @@ export function App() {
   const [snapshotLabel, setSnapshotLabel] = useState('')
   const [branchName, setBranchName] = useState('')
   const [neuralInstruction, setNeuralInstruction] = useState('')
+  const [agentReceipts, setAgentReceipts] = useState<AgentReceipt[]>([])
+  const [agentGrants, setAgentGrants] = useState<Set<AgentCapability>>(
+    () => new Set<AgentCapability>(['workspace.read']),
+  )
+  const [pendingExportFilename, setPendingExportFilename] = useState<string | undefined>()
   const importRef = useRef<HTMLInputElement>(null)
+  const agentStateRef = useRef<AgentWorkspaceState>({
+    artifact: initialArtifact,
+    edits: defaultWorkspaceEdits(),
+    editGraph: createEditGraph(initialArtifact, defaultWorkspaceEdits()),
+    target: { kind: 'artifact' },
+    meshTargets: [],
+  })
+  const agentReceiptsRef = useRef<AgentReceipt[]>([])
+  const agentGrantsRef = useRef<Set<AgentCapability>>(
+    new Set<AgentCapability>(['workspace.read']),
+  )
 
   const latestReceipt = receipts[0]
   const checksum = useMemo(
@@ -132,9 +176,89 @@ export function App() {
     [editGraph, edits],
   )
 
+  const agentState = useMemo<AgentWorkspaceState>(
+    () => ({
+      artifact,
+      edits,
+      editGraph,
+      target,
+      meshTargets,
+    }),
+    [artifact, edits, editGraph, target, meshTargets],
+  )
+  const agentStateFingerprint = useMemo(
+    () => agentFingerprint(agentState),
+    [agentState],
+  )
+
+  useEffect(() => {
+    agentStateRef.current = agentState
+    agentReceiptsRef.current = agentReceipts
+    agentGrantsRef.current = agentGrants
+  }, [agentState, agentReceipts, agentGrants])
+
   const selectedBackend = backends.find((backend) => backend.id === backendId)
   const availableBackends = backends.filter((backend) => backend.available)
   const unavailableBackends = backends.filter((backend) => !backend.available)
+
+  const changeAgentGrant = (capability: AgentCapability, enabled: boolean) => {
+    setAgentGrants((current) => {
+      const next = new Set(current)
+      if (enabled) next.add(capability)
+      else next.delete(capability)
+      agentGrantsRef.current = next
+      return next
+    })
+  }
+
+  const executeGovernedAgentCommand = (command: AgentCommand): AgentReceipt => {
+    const execution = executeAgentCommand(
+      agentStateRef.current,
+      command,
+      agentGrantsRef.current,
+      agentReceiptsRef.current,
+    )
+
+    const nextReceipts = [
+      ...agentReceiptsRef.current,
+      execution.receipt,
+    ].slice(-200)
+
+    agentReceiptsRef.current = nextReceipts
+    setAgentReceipts(nextReceipts)
+
+    if (execution.receipt.status !== 'rejected') {
+      agentStateRef.current = execution.state
+      setArtifact(execution.state.artifact)
+      setEdits(execution.state.edits)
+      setEditGraph(execution.state.editGraph)
+      setTarget(execution.state.target)
+      setSelected(true)
+
+      for (const effect of execution.effects) {
+        if (effect.kind === 'export-glb') {
+          setPendingExportFilename(effect.filename)
+          setExportRequest((value) => value + 1)
+        }
+      }
+    }
+
+    return execution.receipt
+  }
+
+  useEffect(() => {
+    return installPhiFormAgentApi(
+      () => ({
+        schema: 'phiform.agent-descriptor.v1',
+        version: '0.6.0',
+        commands: commandCatalog(),
+        grantedCapabilities: [...agentGrantsRef.current],
+        state: agentFingerprint(agentStateRef.current),
+        meshTargets: agentStateRef.current.meshTargets.map((mesh) => ({ ...mesh })),
+      }),
+      (value) => executeGovernedAgentCommand(parseAgentCommand(value)),
+    )
+  }, [])
 
   const connectBridge = async () => {
     setBridgeStatus('checking')
@@ -183,7 +307,10 @@ export function App() {
       setEdits(nextEdits)
       setEditGraph(createEditGraph(result.artifact, nextEdits, result.receipt))
       setTarget({ kind: 'artifact' })
+      setMeshTargets([])
       setSelected(true)
+      setAgentReceipts([])
+      agentReceiptsRef.current = []
       setProjectStatus('')
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Generation failed.')
@@ -296,7 +423,13 @@ export function App() {
     setProjectStatus('SAVING…')
     setError('')
     try {
-      await saveProjectToBrowser(artifact, edits, editGraph, latestReceipt)
+      await saveProjectToBrowser(
+        artifact,
+        edits,
+        editGraph,
+        agentReceipts,
+        latestReceipt,
+      )
       setProjectStatus('SAVED LOCALLY')
     } catch (cause) {
       setProjectStatus('')
@@ -310,6 +443,10 @@ export function App() {
     setEditGraph(project.editGraph)
     setReceipts(project.latestReceipt ? [project.latestReceipt] : [])
     setTarget(currentGraphNode(project.editGraph).target)
+    const importedAgentReceipts = project.agentReceipts as AgentReceipt[]
+    setAgentReceipts(importedAgentReceipts)
+    agentReceiptsRef.current = importedAgentReceipts
+    setMeshTargets([])
     setSelected(true)
   }
 
@@ -334,10 +471,11 @@ export function App() {
         artifact,
         edits,
         editGraph,
+        agentReceipts,
         latestReceipt,
       )
       downloadPortableProject(project)
-      setProjectStatus('PROJECT V2 EXPORTED')
+      setProjectStatus('PROJECT V3 EXPORTED')
     } catch (cause) {
       setProjectStatus('')
       setError(cause instanceof Error ? cause.message : 'Project export failed.')
@@ -360,7 +498,9 @@ export function App() {
 
   const handleEditedExport = async (blob: Blob) => {
     try {
-      const filename = `${safeName(artifact.label)}-edited.glb`
+      const filename = pendingExportFilename?.trim()
+        || `${safeName(artifact.label)}-edited.glb`
+      setPendingExportFilename(undefined)
       const sha256 = await sha256Blob(blob)
       const derived: DerivedArtifactLineage = {
         id: derivedId(),
@@ -415,7 +555,7 @@ export function App() {
         </div>
 
         <div className="top-status">
-          <span className="pill"><i /> RUNG 5</span>
+          <span className="pill"><i /> RUNG 6</span>
           <span className="pill muted">
             {editGraph.currentBranch} · {dirty ? 'WORKING TREE DIRTY' : 'COMMITTED'}
           </span>
@@ -530,6 +670,7 @@ export function App() {
             exportRequest={exportRequest}
             onSelectedChange={setSelected}
             onTargetChange={setTarget}
+            onMeshTargetsChange={setMeshTargets}
             onEditsChange={setEdits}
             onStatsChange={setMeshStats}
             onExportComplete={(blob) => { void handleEditedExport(blob) }}
@@ -566,6 +707,8 @@ export function App() {
             <div><span>TRIANGLES</span><strong>{meshStats.triangles.toLocaleString()}</strong></div>
             <div><span>GRAPH NODES</span><strong>{graphNodes.length}</strong></div>
             <div><span>BRANCHES</span><strong>{Object.keys(editGraph.branches).length}</strong></div>
+            <div><span>AGENT RECEIPTS</span><strong>{agentReceipts.length}</strong></div>
+            <div><span>AGENT GRANTS</span><strong>{agentGrants.size}</strong></div>
           </div>
 
           <div className="editor-card">
@@ -768,6 +911,15 @@ export function App() {
             )}
           </div>
 
+          <AgentConsole
+            state={agentStateFingerprint}
+            meshTargets={meshTargets}
+            grants={agentGrants}
+            receipts={agentReceipts}
+            onGrantChange={changeAgentGrant}
+            onExecute={executeGovernedAgentCommand}
+          />
+
           <div className="project-card">
             <span className="eyebrow">PROJECT + DERIVED EXPORT</span>
             <div className="project-actions">
@@ -775,7 +927,13 @@ export function App() {
               <button onClick={loadLocal}>LOAD LOCAL</button>
               <button onClick={exportProject}>EXPORT .PHIFORM</button>
               <button onClick={() => importRef.current?.click()}>IMPORT .PHIFORM</button>
-              <button className="wide" onClick={() => setExportRequest((value) => value + 1)}>
+              <button
+                className="wide"
+                onClick={() => {
+                  setPendingExportFilename(undefined)
+                  setExportRequest((value) => value + 1)
+                }}
+              >
                 EXPORT + RECEIPT EDITED GLB
               </button>
             </div>
@@ -812,11 +970,11 @@ export function App() {
           </div>
 
           <div className="authority-note">
-            <span>INTENT ≠ EXECUTION</span>
+            <span>CAPABILITY ≠ AUTHORITY</span>
             <p>
-              PhiForm can now describe exactly what should change, where it should change,
-              and which version it descends from. A recorded neural intent remains evidence
-              of requested work until a capable backend actually returns a derived artifact.
+              Agent commands are explicit verbs with operator-granted capabilities,
+              stale-state preconditions, replay protection, and receipts. Browser agents
+              use the same command executor as this console through window.PhiFormAgent.
             </p>
           </div>
         </aside>
