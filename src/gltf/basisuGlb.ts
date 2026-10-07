@@ -340,3 +340,287 @@ export function inspectBasisuGlb(glb: Uint8Array): {
     })),
   }
 }
+
+
+export interface BasisuCompactResult {
+  bytes: Uint8Array
+  textureCount: number
+  removedFallbackImageCount: number
+  removedBufferViewCount: number
+  removedBinaryBytes: number
+}
+
+function basisuImageIndex(
+  texture: NonNullable<GlbJson['textures']>[number],
+): number | undefined {
+  const extension = texture.extensions?.KHR_texture_basisu as
+    | { source?: number }
+    | undefined
+  return typeof extension?.source === 'number'
+    ? extension.source
+    : undefined
+}
+
+function collectBufferViewReferences(
+  value: unknown,
+  output: Set<number>,
+): void {
+  if (Array.isArray(value)) {
+    for (const item of value) collectBufferViewReferences(item, output)
+    return
+  }
+  if (!value || typeof value !== 'object') return
+
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    if (key === 'bufferView' && typeof item === 'number') {
+      output.add(item)
+    } else {
+      collectBufferViewReferences(item, output)
+    }
+  }
+}
+
+function remapBufferViewReferences(
+  value: unknown,
+  remap: ReadonlyMap<number, number>,
+): void {
+  if (Array.isArray(value)) {
+    for (const item of value) remapBufferViewReferences(item, remap)
+    return
+  }
+  if (!value || typeof value !== 'object') return
+
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    if (key === 'bufferView' && typeof item === 'number') {
+      const next = remap.get(item)
+      if (next === undefined) {
+        throw new Error(
+          `GLB object still references removed bufferView ${item}.`,
+        )
+      }
+      ;(value as Record<string, unknown>)[key] = next
+    } else {
+      remapBufferViewReferences(item, remap)
+    }
+  }
+}
+
+export function compactBasisuGlb(
+  fallbackGlb: Uint8Array,
+): BasisuCompactResult {
+  const { json, bin } = parseGlb(fallbackGlb)
+  const textures = json.textures ?? []
+  const images = json.images ?? []
+  const oldBufferViews = json.bufferViews ?? []
+  const buffers = json.buffers ?? []
+
+  if (textures.length === 0) {
+    throw new Error('Compact BasisU GLB has no textures to process.')
+  }
+  if (buffers.length !== 1) {
+    throw new Error('Rung 12 only compacts GLBs with one embedded buffer.')
+  }
+
+  const fallbackImages = new Set<number>()
+  const basisuImages = new Set<number>()
+
+  for (let index = 0; index < textures.length; index += 1) {
+    const texture = textures[index]
+    const basisu = basisuImageIndex(texture)
+    if (basisu === undefined) {
+      throw new Error(
+        `Texture ${texture.name || index} has no KHR_texture_basisu source; full coverage is required for compaction.`,
+      )
+    }
+    if (typeof texture.source !== 'number') {
+      throw new Error(
+        `Texture ${texture.name || index} has no core fallback source; input is not a Rung 11 fallback-bearing GLB.`,
+      )
+    }
+    if (!images[basisu]) {
+      throw new Error(
+        `Texture ${texture.name || index} points to missing KTX2 image ${basisu}.`,
+      )
+    }
+    if (images[basisu].mimeType !== 'image/ktx2') {
+      throw new Error(
+        `Texture ${texture.name || index} BasisU source is not image/ktx2.`,
+      )
+    }
+
+    fallbackImages.add(texture.source)
+    basisuImages.add(basisu)
+  }
+
+  for (const imageIndex of fallbackImages) {
+    if (basisuImages.has(imageIndex)) {
+      throw new Error(
+        `Image ${imageIndex} is simultaneously a fallback and BasisU image.`,
+      )
+    }
+  }
+
+  for (const texture of textures) delete texture.source
+
+  const imageRemap = new Map<number, number>()
+  const keptImages: NonNullable<GlbJson['images']> = []
+  for (let oldIndex = 0; oldIndex < images.length; oldIndex += 1) {
+    if (fallbackImages.has(oldIndex)) continue
+    imageRemap.set(oldIndex, keptImages.length)
+    keptImages.push(images[oldIndex])
+  }
+
+  for (let index = 0; index < textures.length; index += 1) {
+    const texture = textures[index]
+    const oldSource = basisuImageIndex(texture)
+    if (oldSource === undefined) {
+      throw new Error(
+        `Texture ${texture.name || index} lost its BasisU source during compaction.`,
+      )
+    }
+    const nextSource = imageRemap.get(oldSource)
+    if (nextSource === undefined) {
+      throw new Error(
+        `Texture ${texture.name || index} BasisU image was removed unexpectedly.`,
+      )
+    }
+    texture.extensions = {
+      ...(texture.extensions ?? {}),
+      KHR_texture_basisu: { source: nextSource },
+    }
+  }
+
+  json.images = keptImages
+
+  const usedExtensions = new Set(json.extensionsUsed ?? [])
+  usedExtensions.add('KHR_texture_basisu')
+  json.extensionsUsed = [...usedExtensions]
+
+  const requiredExtensions = new Set(json.extensionsRequired ?? [])
+  requiredExtensions.add('KHR_texture_basisu')
+  json.extensionsRequired = [...requiredExtensions]
+
+  const referencedBufferViews = new Set<number>()
+  collectBufferViewReferences(json, referencedBufferViews)
+
+  const sortedViews = [...referencedBufferViews].sort((a, b) => a - b)
+  for (const index of sortedViews) {
+    if (!oldBufferViews[index]) {
+      throw new Error(`GLB references missing bufferView ${index}.`)
+    }
+  }
+
+  const viewRemap = new Map<number, number>()
+  sortedViews.forEach((oldIndex, newIndex) => {
+    viewRemap.set(oldIndex, newIndex)
+  })
+  remapBufferViewReferences(json, viewRemap)
+
+  const oldLogicalByteLength = buffers[0]?.byteLength ?? bin.byteLength
+  if (oldLogicalByteLength > bin.byteLength) {
+    throw new Error(
+      'GLB buffer byteLength exceeds the available BIN chunk bytes.',
+    )
+  }
+
+  const rebuiltViews: NonNullable<GlbJson['bufferViews']> = []
+  const parts: Uint8Array[] = []
+  let logicalByteLength = 0
+
+  for (const oldIndex of sortedViews) {
+    const sourceView = oldBufferViews[oldIndex]
+    const bufferIndex = sourceView.buffer ?? 0
+    if (bufferIndex !== 0) {
+      throw new Error(
+        `bufferView ${oldIndex} references unsupported buffer ${bufferIndex}.`,
+      )
+    }
+
+    const sourceOffset = sourceView.byteOffset ?? 0
+    const sourceLength = sourceView.byteLength ?? 0
+    const sourceEnd = sourceOffset + sourceLength
+    if (
+      sourceOffset < 0 ||
+      sourceLength < 0 ||
+      sourceEnd > oldLogicalByteLength
+    ) {
+      throw new Error(
+        `bufferView ${oldIndex} exceeds the source BIN bounds.`,
+      )
+    }
+
+    const alignedOffset = align4(logicalByteLength)
+    if (alignedOffset > logicalByteLength) {
+      parts.push(new Uint8Array(alignedOffset - logicalByteLength))
+    }
+
+    parts.push(bin.slice(sourceOffset, sourceEnd))
+    rebuiltViews.push({
+      ...sourceView,
+      buffer: 0,
+      byteOffset: alignedOffset,
+      byteLength: sourceLength,
+    })
+
+    logicalByteLength = alignedOffset + sourceLength
+  }
+
+  json.bufferViews = rebuiltViews
+  buffers[0].byteLength = logicalByteLength
+  json.buffers = buffers
+
+  const rebuiltBin = concat(parts)
+  const removedBinaryBytes = Math.max(
+    0,
+    oldLogicalByteLength - logicalByteLength,
+  )
+
+  return {
+    bytes: buildGlb(json, rebuiltBin),
+    textureCount: textures.length,
+    removedFallbackImageCount: fallbackImages.size,
+    removedBufferViewCount:
+      oldBufferViews.length - rebuiltViews.length,
+    removedBinaryBytes,
+  }
+}
+
+export function inspectCompactBasisuGlb(glb: Uint8Array): {
+  extensionUsed: boolean
+  extensionRequired: boolean
+  textureCount: number
+  texturesWithCoreSource: number
+  texturesWithBasisuSource: number
+  pngJpegImageCount: number
+  ktx2ImageCount: number
+  bufferViewCount: number
+  bufferByteLength: number
+} {
+  const { json } = parseGlb(glb)
+  const textures = json.textures ?? []
+  const images = json.images ?? []
+
+  return {
+    extensionUsed:
+      json.extensionsUsed?.includes('KHR_texture_basisu') ?? false,
+    extensionRequired:
+      json.extensionsRequired?.includes('KHR_texture_basisu') ?? false,
+    textureCount: textures.length,
+    texturesWithCoreSource: textures.filter(
+      (texture) => typeof texture.source === 'number',
+    ).length,
+    texturesWithBasisuSource: textures.filter(
+      (texture) => basisuImageIndex(texture) !== undefined,
+    ).length,
+    pngJpegImageCount: images.filter(
+      (image) =>
+        image.mimeType === 'image/png' ||
+        image.mimeType === 'image/jpeg',
+    ).length,
+    ktx2ImageCount: images.filter(
+      (image) => image.mimeType === 'image/ktx2',
+    ).length,
+    bufferViewCount: json.bufferViews?.length ?? 0,
+    bufferByteLength: json.buffers?.[0]?.byteLength ?? 0,
+  }
+}
